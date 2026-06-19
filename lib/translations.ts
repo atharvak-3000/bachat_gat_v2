@@ -100,6 +100,7 @@ export const translations = {
     maxGuarantorLoansError: "This member is already guarantor for {count} loans (max allowed: {max})",
     overdueGuarantorWarning: "⚠️ This member is guarantor for {count} overdue loan(s)",
     guarantorCountLabel: "Guarantor for {count}/{max} loans",
+    cancelledByAdmin: "Cancelled by admin",
   },
   mr: {
     welcome: "स्वागत आहे",
@@ -202,6 +203,7 @@ export const translations = {
     maxGuarantorLoansError: "हा सदस्य आधीच {count} कर्जाचा जामीनदार आहे (कमाल मर्यादा: {max})",
     overdueGuarantorWarning: "⚠️ हा सदस्य {count} थकीत कर्जाचा जामीनदार आहे",
     guarantorCountLabel: "{count}/{max} कर्जासाठी जामीनदार",
+    cancelledByAdmin: "प्रशासकाने रद्द केले",
   }
 } as const;
 

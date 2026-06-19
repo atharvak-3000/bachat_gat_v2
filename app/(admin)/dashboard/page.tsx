@@ -106,7 +106,7 @@ export default async function DashboardPage() {
     const latestLoans = loansList
       .filter(l => 
         l.disbursed_date === latestMeeting.meeting_date && 
-        l.status === 'ACTIVE'
+        ['ACTIVE', 'CLOSED'].includes(l.status)
       )
       .reduce((sum, l) => sum + l.loan_amount, 0)
 
@@ -171,7 +171,7 @@ export default async function DashboardPage() {
     
     // active issued loans disbursed in this meeting
     const mLoans = loansList
-      .filter(l => l.disbursed_date === m.meeting_date && l.status === 'ACTIVE')
+      .filter(l => l.disbursed_date === m.meeting_date && ['ACTIVE', 'CLOSED'].includes(l.status))
       .reduce((sum, l) => sum + l.loan_amount, 0)
 
     const totals = calcMeetingTotals({

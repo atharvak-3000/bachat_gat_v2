@@ -60,8 +60,8 @@ export async function POST(
     const incs = income || []
     const allLoans = loans || []
 
-    // Issued loans in this meeting: disbursed on meeting date and is ACTIVE (loans issued in meeting by SuperAdmin are ACTIVE, others are PENDING)
-    const activeIssuedLoans = allLoans.filter(l => l.disbursed_date === meeting.meeting_date && l.status === 'ACTIVE')
+    // Issued loans in this meeting: disbursed on meeting date and is ACTIVE or CLOSED (loans issued in meeting by SuperAdmin are ACTIVE, others are PENDING)
+    const activeIssuedLoans = allLoans.filter(l => l.disbursed_date === meeting.meeting_date && ['ACTIVE', 'CLOSED'].includes(l.status))
     const loansIssuedAmount = activeIssuedLoans.reduce((sum, l) => sum + l.loan_amount, 0)
 
     const totalExpenses = exps.reduce((sum, e) => sum + e.amount, 0)

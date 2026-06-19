@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, use } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { toast } from "sonner"
 import {
   formatRupees,
   formatMonthYear,
@@ -151,6 +152,8 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
       saveNotesBtn: "टिपण जतन करा",
       savingNotesText: "जतन करत आहे...",
       noNotesText: "या सभेसाठी कोणतेही टिपण नोंदवलेले नाही.",
+      cancelBtn: "रद्द करा",
+      cancelConfirm: "तुम्हाला हे कर्ज रद्द करायचे आहे का? ही क्रिया पूर्ववत केली जाऊ शकत नाही.",
     },
     en: {
       backToList: "← Back to Meetings List",
@@ -232,6 +235,8 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
       saveNotesBtn: "Save Notes",
       savingNotesText: "Saving...",
       noNotesText: "No notes recorded for this meeting.",
+      cancelBtn: "Cancel",
+      cancelConfirm: "Are you sure you want to cancel this loan? This action cannot be undone.",
     }
   }
   const t = T[lang]
@@ -335,7 +340,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
   const sumIncomes = incomes.reduce((sum, i) => sum + i.amount, 0)
 
   // Active issued loans sum (deducts cash)
-  const activeIssuedLoans = issuedLoans.filter(l => l.status === 'ACTIVE')
+  const activeIssuedLoans = issuedLoans.filter(l => ['ACTIVE', 'CLOSED'].includes(l.status))
   const sumLoansIssued = activeIssuedLoans.reduce((sum, l) => sum + l.loan_amount, 0)
 
   const totalReceipts = sumSavings + sumPenalties + sumRepayments + sumInterest + sumOtherContributions + sumIncomes
@@ -564,6 +569,29 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
       fetchDetails()
     } catch (err: any) {
       alert(err.message)
+    }
+  }
+
+  // Cancel Loan
+  const handleCancelLoan = async (loanId: string) => {
+    if (!confirm(t.cancelConfirm)) {
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/loans/${loanId}/cancel`, {
+        method: "POST"
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || "Failed to cancel loan")
+      }
+
+      toast.success(lang === 'mr' ? "कर्ज यशस्वीरित्या रद्द केले गेले!" : "Loan cancelled successfully!")
+      fetchDetails() // Refresh meetings and loans list
+    } catch (err: any) {
+      toast.error(err.message || "Failed to cancel loan")
     }
   }
 
@@ -1000,19 +1028,30 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                         <td className="px-4 py-3 text-center text-gray-600">{l.interest_rate}%</td>
                         <td className="px-4 py-3 text-center text-gray-600">{l.term_months}m</td>
                         <td className="px-4 py-3">
-                          {l.status === 'PENDING' ? (
-                            <span className="inline-flex px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[10px]">
-                              {t.awaitingApproval}
-                            </span>
-                          ) : l.status === 'ACTIVE' ? (
-                            <span className="inline-flex px-2 py-0.5 bg-green-50 text-green-700 rounded-full text-[10px]">
-                              {t.activeApproved}
-                            </span>
-                          ) : (
-                            <span className="inline-flex px-2 py-0.5 bg-red-50 text-red-700 rounded-full text-[10px]">
-                              {l.status}
-                            </span>
-                          )}
+                          <div className="flex items-center justify-between gap-2">
+                            {l.status === 'PENDING' ? (
+                              <span className="inline-flex px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[10px]">
+                                {t.awaitingApproval}
+                              </span>
+                            ) : l.status === 'ACTIVE' ? (
+                              <span className="inline-flex px-2 py-0.5 bg-green-50 text-green-700 rounded-full text-[10px]">
+                                {t.activeApproved}
+                              </span>
+                            ) : (
+                              <span className="inline-flex px-2 py-0.5 bg-red-50 text-red-700 rounded-full text-[10px]">
+                                {l.status}
+                              </span>
+                            )}
+
+                            {['SUPERADMIN', 'ADMIN'].includes(currentMemberRole) && ['ACTIVE', 'PENDING'].includes(l.status) && (
+                              <button
+                                onClick={() => handleCancelLoan(l.id)}
+                                className="px-2 py-0.5 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-900/40 rounded-lg text-[10px] font-bold transition active:scale-95 ml-2"
+                              >
+                                {t.cancelBtn}
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}

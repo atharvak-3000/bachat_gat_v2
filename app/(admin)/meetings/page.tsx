@@ -60,9 +60,9 @@ export default async function MeetingsPage() {
     const mExps = exps.filter((e) => e.meeting_id === m.id).reduce((sum, e) => sum + e.amount, 0)
     const mIncs = incs.filter((i) => i.meeting_id === m.id).reduce((sum, i) => sum + i.amount, 0)
     
-    // Issued loans: disbursed on meeting date and active
+    // Issued loans: disbursed on meeting date and active or closed
     const mLoans = activeLoans
-      .filter((l) => l.disbursed_date === m.meeting_date && l.status === 'ACTIVE')
+      .filter((l) => l.disbursed_date === m.meeting_date && ['ACTIVE', 'CLOSED'].includes(l.status))
       .reduce((sum, l) => sum + l.loan_amount, 0)
 
     const totals = calcMeetingTotals({
