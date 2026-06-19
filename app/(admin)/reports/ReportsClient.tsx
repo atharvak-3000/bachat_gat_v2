@@ -84,6 +84,7 @@ export default function ReportsClient({
       emisPaidCol: "भरलेले EMI",
       noActiveLoans: "कोणतेही सक्रिय कर्ज नाही",
       netPosition: "निव्वळ स्थिती",
+      finesPenaltyCol: "दंड / दंड व्याज",
     },
     en: {
       reportsTitle: "Reports",
@@ -130,6 +131,7 @@ export default function ReportsClient({
       emisPaidCol: "EMIs Paid",
       noActiveLoans: "No active loans",
       netPosition: "Net Position",
+      finesPenaltyCol: "Fines / Penalty",
     }
   }
   const t = T[lang]
@@ -193,6 +195,7 @@ export default function ReportsClient({
   const memberStats = members.map(m => {
     let tSavings = 0
     let tInterest = 0
+    let tFines = 0
     let meetingsPresent = 0
     let totalMeetings = 0
 
@@ -203,8 +206,18 @@ export default function ReportsClient({
         if (c) {
           tSavings += c.savings_amount
           tInterest += c.interest_paid
+          tFines += c.penalty_paid
           if (c.is_present) meetingsPresent++
         }
+      }
+    })
+
+    const memberLoans = loans.filter(l => l.member_id === m.id)
+    memberLoans.forEach(l => {
+      if (l.loan_emis) {
+        l.loan_emis.forEach(e => {
+          tFines += e.fine_amount
+        })
       }
     })
 
@@ -215,6 +228,7 @@ export default function ReportsClient({
       ...m,
       totalSavings: tSavings,
       totalInterest: tInterest,
+      totalFines: tFines,
       attendance: totalMeetings > 0 ? (meetingsPresent / totalMeetings) * 100 : 0,
       activeLoanAmount: activeLoan ? activeLoan.outstanding_amount : 0,
       netPosition
@@ -352,8 +366,9 @@ export default function ReportsClient({
                 <th className="p-3 text-right">{t.totalSavings}</th>
                 <th className="p-3 text-right">{t.tabLoans}</th>
                 <th className="p-3 text-right">{t.interestCol}</th>
+                <th className="p-3 text-right">{t.finesPenaltyCol}</th>
                 <th className="p-3 text-center">{t.tabAttendance} %</th>
-                <th className="p-3 text-right">{t.netPosition || "निव्वळ स्थिती"}</th>
+                <th className="p-3 text-right">{t.netPosition}</th>
               </tr>
             </thead>
             <tbody>
@@ -364,6 +379,7 @@ export default function ReportsClient({
                   <td className="p-3 text-right text-[#2E4099] dark:text-blue-400 font-semibold">{formatRupees(m.totalSavings)}</td>
                   <td className="p-3 text-right text-[#E85D26] dark:text-orange-400 font-semibold">{formatRupees(m.activeLoanAmount)}</td>
                   <td className="p-3 text-right text-gray-600 dark:text-gray-300">{formatRupees(m.totalInterest)}</td>
+                  <td className="p-3 text-right text-red-600 dark:text-red-400 font-semibold">{formatRupees(m.totalFines)}</td>
                   <td className="p-3 text-center text-gray-500 dark:text-gray-400 font-medium">{m.attendance.toFixed(0)}%</td>
                   <td className={`p-3 text-right font-bold ${m.netPosition >= 0 ? 'text-[#2E4099] dark:text-blue-400' : 'text-red-600 dark:text-red-400'}`}>{formatRupees(m.netPosition)}</td>
                 </tr>
@@ -375,6 +391,7 @@ export default function ReportsClient({
                 <td className="p-3 text-right text-[#2E4099] dark:text-blue-400">{formatRupees(memberStats.reduce((sum, m) => sum + m.totalSavings, 0))}</td>
                 <td className="p-3 text-right text-[#E85D26] dark:text-orange-400">{formatRupees(memberStats.reduce((sum, m) => sum + m.activeLoanAmount, 0))}</td>
                 <td className="p-3 text-right">{formatRupees(memberStats.reduce((sum, m) => sum + m.totalInterest, 0))}</td>
+                <td className="p-3 text-right text-red-600 dark:text-red-400 font-bold">{formatRupees(memberStats.reduce((sum, m) => sum + m.totalFines, 0))}</td>
                 <td className="p-3 text-center">-</td>
                 <td className={`p-3 text-right font-black ${memberStats.reduce((sum, m) => sum + m.netPosition, 0) >= 0 ? 'text-[#2E4099] dark:text-blue-400' : 'text-red-600 dark:text-red-400'}`}>{formatRupees(memberStats.reduce((sum, m) => sum + m.netPosition, 0))}</td>
               </tr>

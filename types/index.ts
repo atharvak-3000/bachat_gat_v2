@@ -1,4 +1,4 @@
-export type Role = 'SUPERADMIN' | 'MEMBER';
+export type Role = 'SUPERADMIN' | 'ADMIN' | 'MEMBER';
 export type MemberStatus = 'ACTIVE' | 'PENDING' | 'REJECTED';
 export type KycStatus = 'PENDING' | 'VERIFIED' | 'REJECTED';
 export type MeetingStatus = 'DRAFT' | 'FINALIZED';
@@ -23,6 +23,7 @@ export interface Organization {
   subscription_expires_at?: string;
   trial_ends_at?: string;
   max_members?: number;
+  max_guarantor_loans?: number;
   is_approved: boolean;
   is_email_verified?: boolean;
   logo_url?: string;
@@ -97,6 +98,7 @@ export interface Loan {
   id: string;
   organization_id: string;
   member_id: string;
+  guarantor_id?: string | null;
   loan_amount: number; // paise
   outstanding_amount: number; // paise
   interest_rate: number; // annual %
@@ -109,6 +111,7 @@ export interface Loan {
   rejection_reason?: string;
   created_at: string;
   member?: Member;
+  guarantor?: { id: string; name: string; name_marathi?: string } | null;
 }
 
 export interface LoanEmi {

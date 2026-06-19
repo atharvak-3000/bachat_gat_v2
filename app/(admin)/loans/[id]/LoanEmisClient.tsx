@@ -12,10 +12,12 @@ interface LoanWithMember extends Loan {
 
 export default function LoanEmisClient({
   loan,
-  initialEmis
+  initialEmis,
+  role
 }: {
   loan: LoanWithMember
   initialEmis: LoanEmi[]
+  role?: string
 }) {
   const router = useRouter()
   const [emis, setEmis] = useState<LoanEmi[]>(initialEmis)
@@ -47,6 +49,7 @@ export default function LoanEmisClient({
     mr: {
       backToList: "← कर्ज सूचीवर परत जा",
       loanDetailsHeader: "कर्ज माहिती",
+      guarantorLabel: "जामीनदार",
       purposeLabel: "हेतू:",
       rateLabel: "व्याज दर:",
       monthsLabel: "महिने:",
@@ -88,6 +91,7 @@ export default function LoanEmisClient({
     en: {
       backToList: "← Back to Loans List",
       loanDetailsHeader: "Loan Details",
+      guarantorLabel: "Guarantor",
       purposeLabel: "Purpose:",
       rateLabel: "Rate:",
       monthsLabel: "Months:",
@@ -203,6 +207,14 @@ export default function LoanEmisClient({
             <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
               {t.purposeLabel} <strong>{loan.purpose || t.defaultPurpose}</strong> | {t.rateLabel} <strong>{loan.interest_rate}%</strong> | {t.monthsLabel} <strong>{loan.term_months}</strong>
             </p>
+            {loan.guarantor && (
+              <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
+                {t.guarantorLabel}:{' '}
+                <Link href={`/members/${loan.guarantor.id}`} className="text-[#2E4099] dark:text-blue-400 hover:underline font-bold">
+                  {loan.guarantor.name}
+                </Link>
+              </p>
+            )}
           </div>
 
           {/* Progress Bar */}
@@ -271,7 +283,7 @@ export default function LoanEmisClient({
                 <th className="px-6 py-4">{t.totalDueCol}</th>
                 <th className="px-6 py-4">{t.paidSoFarCol}</th>
                 <th className="px-6 py-4">{t.statusCol}</th>
-                <th className="px-6 py-4 text-right">{t.actionCol}</th>
+                {role !== 'MEMBER' && <th className="px-6 py-4 text-right">{t.actionCol}</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800 text-sm font-medium">
@@ -311,18 +323,20 @@ export default function LoanEmisClient({
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      {loan.status === 'ACTIVE' && e.status !== 'PAID' ? (
-                        <button
-                          onClick={() => openPaymentModal(e)}
-                          className="bg-orange-50 dark:bg-orange-950/20 hover:bg-orange-100 dark:hover:bg-orange-900/30 text-orange-600 dark:text-orange-400 font-bold px-3.5 py-1.5 rounded-xl text-xs active:scale-95 transition"
-                        >
-                          {t.markPaidBtn}
-                        </button>
-                      ) : (
-                        <span className="text-gray-400 dark:text-gray-500 text-xs font-medium">—</span>
-                      )}
-                    </td>
+                    {role !== 'MEMBER' && (
+                      <td className="px-6 py-4 text-right">
+                        {loan.status === 'ACTIVE' && e.status !== 'PAID' ? (
+                          <button
+                            onClick={() => openPaymentModal(e)}
+                            className="bg-orange-50 dark:bg-orange-950/20 hover:bg-orange-100 dark:hover:bg-orange-900/30 text-orange-600 dark:text-orange-400 font-bold px-3.5 py-1.5 rounded-xl text-xs active:scale-95 transition"
+                          >
+                            {t.markPaidBtn}
+                          </button>
+                        ) : (
+                          <span className="text-gray-400 dark:text-gray-500 text-xs font-medium">—</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 )
               })}

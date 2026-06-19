@@ -256,3 +256,12 @@ CREATE TABLE IF NOT EXISTS public.subscriptions (
 
 -- Grant privileges for subscriptions table
 GRANT ALL PRIVILEGES ON TABLE public.subscriptions TO postgres, anon, authenticated, service_role;
+
+-- ====================================================================
+-- MIGRATION: LOAN GUARANTOR FEATURE
+-- ====================================================================
+ALTER TABLE public.loans 
+ADD COLUMN IF NOT EXISTS guarantor_id UUID REFERENCES public.members(id) ON DELETE SET NULL;
+
+ALTER TABLE public.organizations
+ADD COLUMN IF NOT EXISTS max_guarantor_loans INTEGER DEFAULT 3 NOT NULL;

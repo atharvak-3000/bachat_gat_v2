@@ -10,7 +10,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     const supabase = await createClient()
     const body = await req.json()
 
-    const allowedFields = ['name', 'village', 'taluka', 'district', 'meeting_frequency', 'monthly_saving_amount', 'default_interest_rate', 'default_penalty_amount', 'max_loan_limit', 'logo_url']
+    const allowedFields = ['name', 'village', 'taluka', 'district', 'meeting_frequency', 'monthly_saving_amount', 'default_interest_rate', 'default_penalty_amount', 'max_loan_limit', 'logo_url', 'max_guarantor_loans']
 
     if (id !== performer.organization_id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })

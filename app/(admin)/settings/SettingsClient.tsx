@@ -29,6 +29,7 @@ export default function SettingsClient({
   const [penalty, setPenalty] = useState(organization.default_penalty_amount / 100 || 0)
   const [maxLoan, setMaxLoan] = useState(organization.max_loan_limit / 100 || 0)
   const [frequency, setFrequency] = useState(organization.meeting_frequency || "MONTHLY")
+  const [maxGuarantorLoans, setMaxGuarantorLoans] = useState(organization.max_guarantor_loans ?? 3)
 
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null)
@@ -51,6 +52,7 @@ export default function SettingsClient({
     setPenalty(organization.default_penalty_amount / 100 || 0)
     setMaxLoan(organization.max_loan_limit / 100 || 0)
     setFrequency(organization.meeting_frequency || "MONTHLY")
+    setMaxGuarantorLoans(organization.max_guarantor_loans ?? 3)
   }, [organization])
 
   useEffect(() => {
@@ -83,6 +85,7 @@ export default function SettingsClient({
       interestRate: "व्याज दर (% प्रति महिना)",
       penaltyAmount: "दंड रक्कम (₹ प्रति अनुपस्थिती)",
       maxLoanLimit: "कमाल कर्ज मर्यादा (₹, अमर्यादितसाठी 0)",
+      maxGuarantorLoans: "प्रति जामीनदार कमाल कर्ज",
       meetingFrequency: "सभा वारंवारता",
       saveFinancials: "आर्थिक सेव्ह करा",
       subHeader: "वर्गणी",
@@ -134,6 +137,7 @@ export default function SettingsClient({
       interestRate: "Interest Rate (% per month)",
       penaltyAmount: "Fine Amount (₹ per absence)",
       maxLoanLimit: "Max Loan Limit (₹, 0 for unlimited)",
+      maxGuarantorLoans: "Maximum loans per guarantor",
       meetingFrequency: "Meeting Frequency",
       saveFinancials: "Save Financials",
       subHeader: "Subscription",
@@ -255,7 +259,8 @@ export default function SettingsClient({
           default_interest_rate: interestRate,
           default_penalty_amount: penalty,
           max_loan_limit: maxLoan,
-          meeting_frequency: frequency
+          meeting_frequency: frequency,
+          max_guarantor_loans: maxGuarantorLoans
         })
       })
       if (!res.ok) throw new Error("Failed to save financial settings")
@@ -475,6 +480,10 @@ export default function SettingsClient({
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t.maxLoanLimit}</label>
               <input type="number" min="0" value={maxLoan} onChange={e => setMaxLoan(Number(e.target.value))} required className="w-full border dark:border-gray-800 dark:bg-gray-950 dark:text-white rounded-lg p-2 outline-none focus:ring-1 focus:ring-[#E85D26] focus:border-[#E85D26] text-sm transition" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t.maxGuarantorLoans}</label>
+              <input type="number" min="1" value={maxGuarantorLoans} onChange={e => setMaxGuarantorLoans(Number(e.target.value))} required className="w-full border dark:border-gray-800 dark:bg-gray-950 dark:text-white rounded-lg p-2 outline-none focus:ring-1 focus:ring-[#E85D26] focus:border-[#E85D26] text-sm transition" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t.meetingFrequency}</label>

@@ -94,6 +94,12 @@ export const translations = {
     viewScreenshot: "View Screenshot",
     saving: "Saving",
     loading: "Loading...",
+    guarantor: "Guarantor",
+    guarantorFor: "Guarantor For",
+    maxGuarantorLoans: "Maximum loans per guarantor",
+    maxGuarantorLoansError: "This member is already guarantor for {count} loans (max allowed: {max})",
+    overdueGuarantorWarning: "⚠️ This member is guarantor for {count} overdue loan(s)",
+    guarantorCountLabel: "Guarantor for {count}/{max} loans",
   },
   mr: {
     welcome: "स्वागत आहे",
@@ -190,6 +196,12 @@ export const translations = {
     viewScreenshot: "स्क्रीनशॉट पहा",
     saving: "बचत",
     loading: "लोड होत आहे...",
+    guarantor: "जामीनदार",
+    guarantorFor: "जामीनदार आहे",
+    maxGuarantorLoans: "प्रति जामीनदार कमाल कर्ज",
+    maxGuarantorLoansError: "हा सदस्य आधीच {count} कर्जाचा जामीनदार आहे (कमाल मर्यादा: {max})",
+    overdueGuarantorWarning: "⚠️ हा सदस्य {count} थकीत कर्जाचा जामीनदार आहे",
+    guarantorCountLabel: "{count}/{max} कर्जासाठी जामीनदार",
   }
 } as const;
 

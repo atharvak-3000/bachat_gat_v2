@@ -12,7 +12,7 @@ export async function POST(
     const supabase = await createClient()
     const { id: meetingId } = await params
     const body = await req.json()
-    const { member_id, amount, interest_rate, purpose, term_months } = body
+    const { member_id, amount, interest_rate, purpose, term_months, guarantor_id } = body
 
     // Validate required fields
     if (!member_id || !amount || amount <= 0) {
@@ -20,6 +20,55 @@ export async function POST(
         { error: 'member_id and amount are required' },
         { status: 400 }
       )
+    }
+
+    if (guarantor_id) {
+      if (member_id === guarantor_id) {
+        return NextResponse.json(
+          { error: 'Applicant cannot be their own guarantor' },
+          { status: 400 }
+        )
+      }
+      const { data: guarantorMember } = await supabase
+        .from('members')
+        .select('id, name, status, is_active, organization_id')
+        .eq('id', guarantor_id)
+        .maybeSingle()
+
+      if (!guarantorMember) {
+        return NextResponse.json({ error: 'Guarantor not found' }, { status: 404 })
+      }
+
+      if (guarantorMember.organization_id !== performer.organization_id) {
+        return NextResponse.json(
+          { error: 'Guarantor must be in the same organization' },
+          { status: 403 }
+        )
+      }
+
+      const isGuarantorActive = guarantorMember.is_active !== false &&
+        (!guarantorMember.status || guarantorMember.status === 'ACTIVE')
+
+      if (!isGuarantorActive) {
+        return NextResponse.json({ error: 'Guarantor is not active' }, { status: 400 })
+      }
+
+      // Count guarantor's current active/pending loans they are guaranteeing
+      const { count: guaranteedLoansCount, error: countError } = await supabase
+        .from('loans')
+        .select('id', { count: 'exact', head: true })
+        .eq('guarantor_id', guarantor_id)
+        .in('status', ['ACTIVE', 'PENDING'])
+
+      if (countError) throw countError
+
+      const limit = performer.organization.max_guarantor_loans ?? 3
+      if ((guaranteedLoansCount ?? 0) >= limit) {
+        return NextResponse.json({
+          error: 'GUARANTOR_LIMIT_REACHED',
+          message: `This member is already guarantor for ${guaranteedLoansCount} loans (max allowed: ${limit})`
+        }, { status: 400 })
+      }
     }
 
     // Get meeting — must be DRAFT and same org
@@ -118,6 +167,7 @@ export async function POST(
       .insert({
         organization_id: performer.organization_id,
         member_id,
+        guarantor_id: guarantor_id || null,
         loan_amount: loanAmountPaise,
         outstanding_amount: loanAmountPaise,
         interest_rate: Number(interest_rate) || 2.0,
@@ -154,6 +204,14 @@ export async function POST(
       amount: loanAmountPaise,
       status: loanStatus
     })
+
+    if (guarantor_id) {
+      await logActivity(supabase, performer.id, performer.organization_id, 'GUARANTOR_ASSIGNED', 'loan', loan.id, {
+        member_id,
+        guarantor_id,
+        loan_id: loan.id
+      })
+    }
 
     return NextResponse.json(loan)
 

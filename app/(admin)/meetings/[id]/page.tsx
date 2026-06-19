@@ -53,7 +53,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
   // Form states for adding expenses/income/loans
   const [expenseForm, setExpenseForm] = useState({ category: "MISCELLANEOUS", amount: "", description: "" })
   const [incomeForm, setIncomeForm] = useState({ category: "OTHER", amount: "", description: "" })
-  const [loanForm, setLoanForm] = useState({ member_id: "", amount: "", interest_rate: "2.0", term_months: "12", purpose: "" })
+  const [loanForm, setLoanForm] = useState({ member_id: "", amount: "", interest_rate: "2.0", term_months: "12", purpose: "", guarantor_id: "" })
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
@@ -97,6 +97,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
       termLabel: "मुदत (महिने)",
       purposeLabel: "हेतू",
       purposePlaceholder: "उदा. वैद्यकीय",
+      guarantorLabel: "जामीनदार निवडा (पर्यायी)",
       adminHint: "* अध्यक्षांनी मंजूर केलेले &rarr; सुपरअध्यक्ष मंजुरीची प्रतीक्षा | सुपरअध्यक्षांनी मंजूर केलेले &rarr; स्वयंचलित मंजूर",
       issueLoanBtn: "कर्ज मंजूर करा",
       loansListHeader: "सदस्य",
@@ -177,6 +178,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
       termLabel: "Term (Months)",
       purposeLabel: "Purpose",
       purposePlaceholder: "e.g. Medical",
+      guarantorLabel: "Select Guarantor (Optional)",
       adminHint: "* Admin issued &rarr; Awaiting SuperAdmin approval | SuperAdmin issued &rarr; Auto-approved",
       issueLoanBtn: "Issue Loan",
       loansListHeader: "Member",
@@ -521,7 +523,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
     e.preventDefault()
     setFormErrors({})
 
-    const { member_id, amount, interest_rate, term_months, purpose } = loanForm
+    const { member_id, amount, interest_rate, term_months, purpose, guarantor_id } = loanForm
     if (!member_id) {
       setFormErrors(prev => ({ ...prev, member_id: "Please select a member" }))
       return
@@ -544,7 +546,8 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
           amount: amtPaise,
           interest_rate: rateFloat,
           term_months: monthsInt,
-          purpose
+          purpose,
+          guarantor_id: guarantor_id || null
         })
       })
 
@@ -555,7 +558,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
 
       const newLoan = await res.json()
       setIssuedLoans(prev => [...prev, newLoan])
-      setLoanForm({ member_id: "", amount: "", interest_rate: "2.0", term_months: "12", purpose: "" })
+      setLoanForm({ member_id: "", amount: "", interest_rate: "2.0", term_months: "12", purpose: "", guarantor_id: "" })
       
       // Refresh active loans to update outstanding hints
       fetchDetails()
@@ -871,12 +874,12 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
 
             {/* Loan Issue Form */}
             {!isFinalized && (
-              <form onSubmit={handleIssueLoan} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-end bg-gray-50/50 p-4 rounded-2xl border border-gray-100">
+              <form onSubmit={handleIssueLoan} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5 items-end bg-gray-50/50 p-4 rounded-2xl border border-gray-100">
                 <div className="lg:col-span-1">
                   <label className="block text-xs font-bold text-gray-700 mb-1">{t.selectMemberLabel}</label>
                   <select
                     value={loanForm.member_id}
-                    onChange={(e) => setLoanForm({ ...loanForm, member_id: e.target.value })}
+                    onChange={(e) => setLoanForm({ ...loanForm, member_id: e.target.value, guarantor_id: "" })}
                     className="w-full border border-gray-200 rounded-lg p-2 text-xs bg-white focus:border-orange-500 outline-none"
                   >
                     <option value="">{t.selectMemberOption}</option>
@@ -888,6 +891,24 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                     ))}
                   </select>
                   {formErrors.member_id && <p className="text-red-500 text-[10px] mt-0.5">{formErrors.member_id}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">{t.guarantorLabel}</label>
+                  <select
+                    value={loanForm.guarantor_id}
+                    onChange={(e) => setLoanForm({ ...loanForm, guarantor_id: e.target.value })}
+                    className="w-full border border-gray-200 rounded-lg p-2 text-xs bg-white focus:border-orange-500 outline-none"
+                  >
+                    <option value="">{lang === 'mr' ? 'जामीनदार (पर्यायी)' : 'Guarantor (Optional)'}</option>
+                    {orgMembers
+                      .filter(m => m.id !== loanForm.member_id)
+                      .map(m => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                  </select>
                 </div>
 
                 <div>
@@ -937,7 +958,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                   />
                 </div>
 
-                <div className="sm:col-span-2 lg:col-span-5 flex justify-between items-center mt-2 pt-2 border-t border-gray-100/50">
+                <div className="sm:col-span-2 lg:col-span-6 flex justify-between items-center mt-2 pt-2 border-t border-gray-100/50">
                   <span className="text-[10px] text-gray-400" dangerouslySetInnerHTML={{ __html: t.adminHint }} />
                   <button
                     type="submit"
@@ -967,7 +988,14 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                   <tbody className="divide-y divide-gray-100 font-medium">
                     {issuedLoans.map(l => (
                       <tr key={l.id} className="hover:bg-gray-50/50">
-                        <td className="px-4 py-3 font-bold text-gray-900">{l.member?.name}</td>
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-gray-900">{l.member?.name}</div>
+                          {(l as any).guarantor && (
+                            <div className="text-[10px] text-gray-500 font-semibold mt-0.5">
+                              {lang === 'mr' ? 'जामीनदार' : 'Guarantor'}: {(l as any).guarantor.name}
+                            </div>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-gray-900">{formatRupees(l.loan_amount)}</td>
                         <td className="px-4 py-3 text-center text-gray-600">{l.interest_rate}%</td>
                         <td className="px-4 py-3 text-center text-gray-600">{l.term_months}m</td>

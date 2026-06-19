@@ -99,6 +99,7 @@ export default function MemberLoansPage() {
                     </h3>
                     <p className="text-gray-400 dark:text-gray-500 text-xs mt-1">
                       {t("purpose")}: {loan.purpose || t("notSpecified")} • {t("disbursedOn")}: {new Date(loan.disbursed_date).toLocaleDateString('en-IN')}
+                      {loan.guarantor && ` • ${t("guarantor")}: ${loan.guarantor.name}`}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
@@ -178,6 +179,12 @@ export default function MemberLoansPage() {
                     <span>{t("purpose")}:</span>
                     <strong className="text-gray-800 dark:text-white">{loan.purpose || t("notSpecified")}</strong>
                   </div>
+                  {loan.guarantor && (
+                    <div className="flex justify-between">
+                      <span>{t("guarantor")}:</span>
+                      <strong className="text-gray-800 dark:text-white">{loan.guarantor.name}</strong>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

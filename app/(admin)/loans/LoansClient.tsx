@@ -14,11 +14,13 @@ interface LoanWithDetails extends Loan {
 export default function LoansClient({
   loans,
   currentRole,
-  activeTab: initialTab
+  activeTab: initialTab,
+  members = []
 }: {
   loans: LoanWithDetails[]
   currentRole: Role
   activeTab: string
+  members?: Member[]
 }) {
   const router = useRouter()
   const [tab, setTab] = useState(initialTab)
@@ -51,6 +53,7 @@ export default function LoansClient({
       tabOverdue: "थकीत",
       tabClosed: "बंद झालेले",
       memberLabel: "सदस्य",
+      guarantorLabel: "जामीनदार",
       loanAmountLabel: "कर्ज रक्कम",
       purposeLabel: "हेतू",
       rateLabel: "व्याज दर (% वार्षिक)",
@@ -89,6 +92,7 @@ export default function LoansClient({
       tabOverdue: "Overdue",
       tabClosed: "Closed",
       memberLabel: "Member",
+      guarantorLabel: "Guarantor",
       loanAmountLabel: "Loan Amount",
       purposeLabel: "Purpose",
       rateLabel: "Rate (% p.a.)",
@@ -154,12 +158,19 @@ export default function LoansClient({
   const filteredLoans = getFilteredLoans()
 
   // Actions
-  const handleApprove = async (loanId: string) => {
+  const handleApprove = async (loanId: string, guarantorId?: string) => {
     if (!confirm(t.approveConfirm)) return
     setLoadingId(loanId)
     try {
-      const res = await fetch(`/api/loans/${loanId}/approve`, { method: "POST" })
-      if (!res.ok) throw new Error("Failed to approve loan")
+      const res = await fetch(`/api/loans/${loanId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ guarantor_id: guarantorId || null })
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.message || data.error || "Failed to approve loan")
+      }
       router.refresh()
     } catch (err: any) {
       alert(err.message)
@@ -282,6 +293,14 @@ export default function LoansClient({
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                       {loan.purpose || t.noPurpose}
                     </p>
+                    {loan.guarantor && (
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        <strong>{t.guarantorLabel}:</strong>{' '}
+                        <Link href={`/members/${loan.guarantor.id}`} className="text-[#2E4099] dark:text-blue-400 hover:underline font-semibold">
+                          {loan.guarantor.name}
+                        </Link>
+                      </p>
+                    )}
                   </div>
                   <LoanStatusBadge status={loan.status} />
                 </div>
@@ -330,20 +349,37 @@ export default function LoansClient({
                   </Link>
                   {loan.status === 'PENDING' && 
                    currentRole === 'SUPERADMIN' && (
-                    <>
-                      <button
-                        onClick={() => handleApprove(loan.id)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold
-                                   bg-green-600 text-white hover:bg-green-700">
-                        {t.approveBtn}
-                      </button>
-                      <button
-                        onClick={() => handleReject(loan.id)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold
-                                   border border-red-300 dark:border-red-900/50 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20">
-                        {t.rejectBtn}
-                      </button>
-                    </>
+                    <div className="w-full space-y-2 mt-2">
+                      <select
+                        id={`guarantor-select-mobile-${loan.id}`}
+                        className="w-full text-xs border rounded-lg p-2 dark:bg-gray-950 dark:text-white dark:border-gray-800"
+                        defaultValue=""
+                      >
+                        <option value="">{lang === 'mr' ? 'जामीनदार निवडा (पर्यायी)' : 'Select Guarantor (Optional)'}</option>
+                        {members
+                          .filter(m => m.id !== loan.member_id)
+                          .map(m => (
+                            <option key={m.id} value={m.id}>
+                              {lang === 'mr' && m.name_marathi ? m.name_marathi : m.name}
+                            </option>
+                          ))}
+                      </select>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            const selectEl = document.getElementById(`guarantor-select-mobile-${loan.id}`) as HTMLSelectElement
+                            handleApprove(loan.id, selectEl?.value || undefined)
+                          }}
+                          className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 text-center">
+                          {t.approveBtn}
+                        </button>
+                        <button
+                          onClick={() => handleReject(loan.id)}
+                          className="flex-1 px-3 py-2 border border-red-300 dark:border-red-900/50 text-red-600 dark:text-red-400 rounded-lg text-xs font-semibold hover:bg-red-50 dark:hover:bg-red-950/20 text-center">
+                          {t.rejectBtn}
+                        </button>
+                      </div>
+                    </div>
                   )}
                   {loan.status === 'ACTIVE' && 
                    currentRole === 'SUPERADMIN' && (
@@ -364,6 +400,7 @@ export default function LoansClient({
               <thead>
                 <tr className="bg-gray-50 dark:bg-gray-950 text-[#1B2B6B]/80 dark:text-white/80 font-bold text-xs border-b border-gray-100 dark:border-gray-800 uppercase tracking-wider">
                   <th className="px-6 py-4">{t.memberLabel}</th>
+                  <th className="px-6 py-4">{t.guarantorLabel}</th>
                   <th className="px-6 py-4">{t.loanAmountLabel}</th>
                   <th className="px-6 py-4">{t.purposeLabel}</th>
                   <th className="px-6 py-4 text-center">{t.rateLabel}</th>
@@ -390,6 +427,15 @@ export default function LoansClient({
                           </span>
                         )}
                       </td>
+                      <td className="px-6 py-4 text-gray-700 dark:text-gray-300">
+                        {l.guarantor ? (
+                          <Link href={`/members/${l.guarantor.id}`} className="hover:underline text-[#2E4099] dark:text-blue-400 font-semibold">
+                            {l.guarantor.name}
+                          </Link>
+                        ) : (
+                          <span className="text-gray-400 dark:text-gray-600">—</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-gray-900 dark:text-white">{formatRupees(l.loan_amount)}</td>
                       <td className="px-6 py-4 text-gray-500 dark:text-gray-400 text-xs truncate max-w-[150px]" title={l.purpose}>
                         {l.purpose || t.noPurpose}
@@ -406,21 +452,40 @@ export default function LoansClient({
                         {l.status === 'PENDING' && (
                           <>
                             {isSuperAdmin ? (
-                              <div className="inline-flex gap-2">
-                                <button
-                                  disabled={loadingId === l.id}
-                                  onClick={() => handleApprove(l.id)}
-                                  className="bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-1.5 rounded-xl text-xs active:scale-95 transition"
+                              <div className="inline-flex flex-col gap-1 items-end">
+                                <select
+                                  id={`guarantor-select-${l.id}`}
+                                  className="text-xs border rounded-lg p-1 bg-white dark:bg-gray-950 dark:text-white dark:border-gray-800 w-44"
+                                  defaultValue=""
                                 >
-                                  {t.approveBtn}
-                                </button>
-                                <button
-                                  disabled={loadingId === l.id}
-                                  onClick={() => handleReject(l.id)}
-                                  className="bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1.5 rounded-xl text-xs active:scale-95 transition"
-                                >
-                                  {t.rejectBtn}
-                                </button>
+                                  <option value="">{lang === 'mr' ? 'जामीनदार निवडा (पर्यायी)' : 'Select Guarantor (Optional)'}</option>
+                                  {members
+                                    .filter(m => m.id !== l.member_id)
+                                    .map(m => (
+                                      <option key={m.id} value={m.id}>
+                                        {lang === 'mr' && m.name_marathi ? m.name_marathi : m.name}
+                                      </option>
+                                    ))}
+                                </select>
+                                <div className="inline-flex gap-2">
+                                  <button
+                                    disabled={loadingId === l.id}
+                                    onClick={() => {
+                                      const selectEl = document.getElementById(`guarantor-select-${l.id}`) as HTMLSelectElement
+                                      handleApprove(l.id, selectEl?.value || undefined)
+                                    }}
+                                    className="bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-1.5 rounded-xl text-xs active:scale-95 transition"
+                                  >
+                                    {t.approveBtn}
+                                  </button>
+                                  <button
+                                    disabled={loadingId === l.id}
+                                    onClick={() => handleReject(l.id)}
+                                    className="bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1.5 rounded-xl text-xs active:scale-95 transition"
+                                  >
+                                    {t.rejectBtn}
+                                  </button>
+                                </div>
                               </div>
                             ) : (
                               <span 

@@ -13,9 +13,20 @@ interface MemberDetailClientProps {
     attendance_percent: number
     net_position: number
   }
+  guaranteedLoans?: any[]
+  overdueCount?: number
+  activeGuaranteedCount?: number
+  maxGuarantorLoans?: number
 }
 
-export default function MemberDetailClient({ member, stats }: MemberDetailClientProps) {
+export default function MemberDetailClient({
+  member,
+  stats,
+  guaranteedLoans = [],
+  overdueCount = 0,
+  activeGuaranteedCount = 0,
+  maxGuarantorLoans = 3
+}: MemberDetailClientProps) {
   const [lang, setLang] = useState<'mr'|'en'>('mr')
   const [currentUserRole, setCurrentUserRole] = useState('')
 
@@ -76,6 +87,13 @@ export default function MemberDetailClient({ member, stats }: MemberDetailClient
       requiredError: "सर्व फील्ड भरणे आवश्यक आहे!",
       successResetMsg: "🎉 पासवर्ड यशस्वीरित्या बदलला आहे!",
       cancel: "रद्द करा",
+      guarantorFor: "जामीनदार आहे",
+      overdueGuarantorWarning: "⚠️ हा सदस्य {count} थकीत कर्जाचा जामीनदार आहे",
+      guarantorCountLabel: "{count}/{max} कर्जासाठी जामीनदार",
+      guaranteedBorrower: "कर्जदार सदस्य",
+      guaranteedAmount: "कर्ज रक्कम",
+      guaranteedStatus: "कर्ज स्थिती",
+      guaranteedOutstanding: "कर्ज शिल्लक",
     },
     en: {
       profileLabel: "Member Profile",
@@ -106,6 +124,13 @@ export default function MemberDetailClient({ member, stats }: MemberDetailClient
       requiredError: "All fields are required!",
       successResetMsg: "🎉 Password successfully updated!",
       cancel: "Cancel",
+      guarantorFor: "Guarantor For",
+      overdueGuarantorWarning: "⚠️ This member is guarantor for {count} overdue loan(s)",
+      guarantorCountLabel: "Guarantor for {count}/{max} loans",
+      guaranteedBorrower: "Borrower",
+      guaranteedAmount: "Loan Amount",
+      guaranteedStatus: "Loan Status",
+      guaranteedOutstanding: "Outstanding Balance",
     }
   }
   const t = T[lang]
@@ -172,6 +197,16 @@ export default function MemberDetailClient({ member, stats }: MemberDetailClient
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 animate-fadeIn">
+      {/* Overdue Guarantor Warning Banner */}
+      {overdueCount > 0 && (
+        <div className="p-4 rounded-2xl bg-red-50 text-red-700 border border-red-200 text-sm font-bold animate-pulse flex items-center gap-2">
+          <span>⚠️</span>
+          <span>
+            {t.overdueGuarantorWarning.replace("{count}", overdueCount.toString())}
+          </span>
+        </div>
+      )}
+
       {/* Header / Profile Card */}
       <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -236,7 +271,7 @@ export default function MemberDetailClient({ member, stats }: MemberDetailClient
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
         {/* Card 1 — Total Savings */}
         <div className="bg-white border border-gray-100 p-4 md:p-6 rounded-3xl shadow-sm">
           <span className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider leading-tight block">
@@ -278,7 +313,7 @@ export default function MemberDetailClient({ member, stats }: MemberDetailClient
         </div>
 
         {/* Card 5 — Net Position */}
-        <div className="bg-white border-2 border-orange-50 p-4 md:p-6 rounded-3xl shadow-md col-span-2 lg:col-span-1">
+        <div className="bg-white border-2 border-orange-50 p-4 md:p-6 rounded-3xl shadow-md">
           <span className="text-[10px] md:text-xs font-bold text-orange-600 uppercase tracking-wider leading-tight block">
             {t.netPosition}
           </span>
@@ -389,6 +424,48 @@ export default function MemberDetailClient({ member, stats }: MemberDetailClient
               </form>
             )}
 
+          </div>
+        </div>
+      )}
+      {/* Guaranteed Loans Check List */}
+      {guaranteedLoans.length > 0 && (
+        <div className="bg-white border border-gray-100 rounded-3xl shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-gray-100 bg-gray-50/50">
+            <h2 className="text-lg font-bold text-gray-900">{t.guarantorFor}</h2>
+          </div>
+          <div className="overflow-x-auto p-6 pt-0">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100 uppercase tracking-wider">
+                  <th className="px-4 py-3">{t.guaranteedBorrower}</th>
+                  <th className="px-4 py-3">{t.guaranteedAmount}</th>
+                  <th className="px-4 py-3">{t.guaranteedOutstanding}</th>
+                  <th className="px-4 py-3">{t.guaranteedStatus}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 font-medium">
+                {guaranteedLoans.map((l: any) => (
+                  <tr key={l.id} className="hover:bg-gray-50/50">
+                    <td className="px-4 py-3 font-bold text-gray-900">
+                      {l.member?.name}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700">{formatRupees(l.loan_amount)}</td>
+                    <td className="px-4 py-3 text-gray-900 font-bold">{formatRupees(l.outstanding_amount)}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                        l.status === 'ACTIVE'
+                          ? l.is_overdue
+                            ? 'bg-red-50 text-red-700 border border-red-200 animate-pulse font-extrabold'
+                            : 'bg-green-50 text-green-700 border border-green-200'
+                          : 'bg-gray-50 text-gray-500 border border-gray-200'
+                      }`}>
+                        {l.status === 'ACTIVE' && l.is_overdue ? (lang === 'mr' ? 'थकीत (Overdue)' : 'Overdue') : l.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

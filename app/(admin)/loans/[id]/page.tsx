@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { requireAdminOrAbove } from "@/lib/auth"
+import { requireAuth } from "@/lib/auth"
 import { createClient } from "@/lib/supabase/server"
 import LoanEmisClient from "./LoanEmisClient"
 
@@ -10,7 +10,7 @@ export default async function AdminLoanDetailsPage({
 }) {
   let performer
   try {
-    performer = await requireAdminOrAbove()
+    performer = await requireAuth()
   } catch {
     redirect("/sign-in")
   }
@@ -18,10 +18,10 @@ export default async function AdminLoanDetailsPage({
   const { id } = await params
   const supabase = await createClient()
 
-  // Fetch loan with member details
+  // Fetch loan with member details and guarantor
   const { data: loan, error: loanError } = await supabase
     .from("loans")
-    .select("*, member:members!loans_member_id_fkey(*)")
+    .select("*, member:members!loans_member_id_fkey(*), guarantor:members!guarantor_id(id, name)")
     .eq("id", id)
     .eq("organization_id", performer.organization_id)
     .maybeSingle()
@@ -45,6 +45,7 @@ export default async function AdminLoanDetailsPage({
     <LoanEmisClient
       loan={loan}
       initialEmis={emis || []}
+      role={performer.role}
     />
   )
 }

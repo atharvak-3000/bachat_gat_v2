@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { requireAdminOrAbove } from "@/lib/auth"
+import { requireAuth } from "@/lib/auth"
 import { createClient } from "@/lib/supabase/server"
 import ReportsClient from "./ReportsClient"
 import { MeetingWithDetails, Member, LoanWithEmis, Organization } from "@/types"
@@ -7,7 +7,7 @@ import { MeetingWithDetails, Member, LoanWithEmis, Organization } from "@/types"
 export default async function ReportsPage() {
   let currentMember
   try {
-    currentMember = await requireAdminOrAbove()
+    currentMember = await requireAuth()
   } catch {
     redirect("/sign-in")
   }

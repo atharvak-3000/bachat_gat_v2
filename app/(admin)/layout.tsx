@@ -3,14 +3,21 @@ import { getCurrentMember } from "@/lib/auth"
 import AdminLayoutClient from "@/components/shared/AdminLayoutClient"
 import { createClient } from "@/lib/supabase/server"
 import { checkSubscriptionAccess } from "@/lib/subscription"
+import { headers } from "next/headers"
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const member = await getCurrentMember()
 
   if (!member) redirect("/onboarding")
-  // Both MEMBER role redirected to member portal
-  if (member.role === "MEMBER") redirect("/member")
-  // ADMIN and SUPERADMIN both allowed through to /dashboard
+  
+  const headersList = await headers()
+  const pathname = headersList.get("x-pathname") || ""
+  const isAllowedMemberPath = pathname.startsWith("/loans") || pathname.startsWith("/reports")
+
+  // Both MEMBER role redirected to member portal except for /loans and /reports
+  if (member.role === "MEMBER" && !isAllowedMemberPath) {
+    redirect("/member")
+  }
 
   // Check subscription/trial access limits
   checkSubscriptionAccess(member.organization)

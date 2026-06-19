@@ -44,7 +44,7 @@ export async function GET(
         .eq("meeting_id", id),
       supabase
         .from("loans")
-        .select("*, member:members!loans_member_id_fkey(*)")
+        .select("*, member:members!loans_member_id_fkey(*), guarantor:members!guarantor_id(id, name)")
         .eq("organization_id", performer.organization_id),
       supabase
         .from("organizations")

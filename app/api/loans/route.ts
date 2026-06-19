@@ -10,7 +10,7 @@ export async function GET(req: Request) {
 
     const { data: loans, error } = await supabase
       .from("loans")
-      .select("*, member:members!loans_member_id_fkey(*)")
+      .select("*, member:members!loans_member_id_fkey(*), guarantor:members!guarantor_id(id, name)")
       .eq("organization_id", performer.organization_id)
       .order("created_at", { ascending: false })
 

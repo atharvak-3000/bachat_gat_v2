@@ -30,7 +30,14 @@ export async function middleware(request: NextRequest) {
     return res
   }
 
-  let response = NextResponse.next({ request })
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set('x-pathname', pathname)
+
+  let response = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  })
   response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
   response.headers.set('Pragma', 'no-cache')
   response.headers.set('Expires', '0')
@@ -49,7 +56,11 @@ export async function middleware(request: NextRequest) {
         cookiesToSet.forEach(({ name, value }) =>
           request.cookies.set(name, value)
         )
-        response = NextResponse.next({ request })
+        response = NextResponse.next({
+          request: {
+            headers: requestHeaders,
+          },
+        })
         cookiesToSet.forEach(({ name, value, options }) =>
           response.cookies.set(name, value, options)
         )
@@ -137,10 +148,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  // MEMBER cannot go to admin paths
+  // MEMBER cannot go to admin paths, EXCEPT for /loans and /reports
   const ADMIN_PATHS = [
     '/dashboard', '/meetings', '/members',
-    '/loans', '/reports', '/payments', '/expenses'
+    '/payments', '/expenses'
   ]
   if (member.role === 'MEMBER' &&
     ADMIN_PATHS.some(p => pathname.startsWith(p))) {

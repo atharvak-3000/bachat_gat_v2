@@ -50,6 +50,7 @@ export default function AdminLayoutClient({
       reports: "अहवाल",
       settings: "सेटिंग्ज",
       signOut: "साइन आउट",
+      memberPortal: "सदस्य पोर्टल",
     },
     en: {
       dashboard: "Dashboard",
@@ -59,6 +60,7 @@ export default function AdminLayoutClient({
       reports: "Reports",
       settings: "Settings",
       signOut: "Sign Out",
+      memberPortal: "Member Portal",
     }
   }
   const t = T[lang]
@@ -91,6 +93,10 @@ export default function AdminLayoutClient({
       icon: <Image src="/Bachat Gat icons/Reports.svg" alt="Reports" width={24} height={24} />
     },
   ]
+
+  const filteredNavItems = member.role === 'MEMBER'
+    ? navItems.filter(item => item.href === '/loans' || item.href === '/reports')
+    : navItems
 
   const signOut = async () => {
     const supabase = createClient()
@@ -159,7 +165,17 @@ export default function AdminLayoutClient({
           </button>
         </div>
       <nav className="space-y-1.5 flex-1">
-        {navItems.map((item) => {
+        {member.role === 'MEMBER' && (
+          <Link
+            href="/member"
+            onClick={() => setShowSidebar(false)}
+            className="flex items-center gap-4 rounded-xl px-4 py-3.5 text-base font-bold transition-all duration-150 text-blue-100 hover:bg-white/10 hover:text-white border border-dashed border-white/20 mb-2"
+          >
+            <span className="text-xl">🚪</span>
+            <span className="flex-1">{t.memberPortal}</span>
+          </Link>
+        )}
+        {filteredNavItems.map((item) => {
           const isActive = pathname.startsWith(item.href)
           return (
             <Link
@@ -266,7 +282,7 @@ export default function AdminLayoutClient({
 
       {/* Bottom Nav for Mobile */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-[#1A1D27] border-t border-[#E5E7EB] dark:border-gray-700 z-30 flex justify-around py-2 transition-colors duration-150">
-        {navItems.map((item) => {
+        {filteredNavItems.map((item) => {
           const isActive = pathname.startsWith(item.href)
           return (
             <Link
