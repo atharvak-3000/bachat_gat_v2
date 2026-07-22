@@ -1,6 +1,6 @@
-import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { requireSuperAdmin, requireAdminOrAbove, requireAuth } from "@/lib/auth"
+import prisma from "@/lib/prisma"
+import { requireAdminOrAbove, requireAuth, toSafeMember } from "@/lib/auth"
 
 export async function GET(
   req: Request,
@@ -8,73 +8,73 @@ export async function GET(
 ) {
   try {
     const performer = await requireAuth()
-    const supabase = await createClient()
     const { id } = await params
 
-    const { data: meeting, error: meetingError } = await supabase
-      .from("meetings")
-      .select("*")
-      .eq("id", id)
-      .eq("organization_id", performer.organization_id)
-      .maybeSingle()
+    const meeting = await prisma.meeting.findFirst({
+      where: {
+        id,
+        organizationId: performer.organizationId,
+      },
+    })
 
-    if (meetingError) throw meetingError
     if (!meeting) {
-      return NextResponse.json({ error: 'Meeting not found' }, { status: 404 })
+      return NextResponse.json({ error: "Meeting not found" }, { status: 404 })
     }
 
-    const [
-      { data: contributions },
-      { data: expenses },
-      { data: income },
-      { data: allLoans },
-      { data: orgSettings }
-    ] = await Promise.all([
-      supabase
-        .from("meeting_contributions")
-        .select("*, member:members(*)")
-        .eq("meeting_id", id),
-      supabase
-        .from("meeting_expenses")
-        .select("*")
-        .eq("meeting_id", id),
-      supabase
-        .from("meeting_income")
-        .select("*")
-        .eq("meeting_id", id),
-      supabase
-        .from("loans")
-        .select("*, member:members!loans_member_id_fkey(*), guarantor:members!guarantor_id(id, name)")
-        .eq("organization_id", performer.organization_id),
-      supabase
-        .from("organizations")
-        .select("*")
-        .eq("id", performer.organization_id)
-        .single()
+    const [contributions, expenses, income, allLoans, orgSettings] = await Promise.all([
+      prisma.meetingContribution.findMany({
+        where: { meetingId: id },
+        include: { member: true },
+      }),
+      prisma.meetingExpense.findMany({
+        where: { meetingId: id },
+      }),
+      prisma.meetingIncome.findMany({
+        where: { meetingId: id },
+      }),
+      prisma.loan.findMany({
+        where: { organizationId: performer.organizationId },
+        include: {
+          member: true,
+          guarantor: { select: { id: true, name: true } },
+        },
+      }),
+      prisma.organization.findUnique({
+        where: { id: performer.organizationId },
+      }),
     ])
 
-    // "loans issued this meeting" could be loans created/disbursed on meeting_date or with matching purpose/notes
-    // Let's filter loans where disbursed_date = meeting.meeting_date
-    const loansIssued = (allLoans || []).filter(l => l.disbursed_date === meeting.meeting_date)
+    const safeContributions = contributions.map((c) => ({
+      ...c,
+      member: toSafeMember(c.member),
+    }))
 
-    // Outstanding loans list (ACTIVE) for outstanding hints
-    const activeLoans = (allLoans || []).filter(l => l.status === 'ACTIVE')
+    const safeLoans = allLoans.map((l) => ({
+      ...l,
+      member: toSafeMember(l.member),
+    }))
+
+    const meetingDateStr = meeting.meetingDate.toISOString().split("T")[0]
+    const loansIssued = safeLoans.filter(
+      (l) => l.disbursedDate.toISOString().split("T")[0] === meetingDateStr
+    )
+    const activeLoans = safeLoans.filter((l) => l.status === "ACTIVE")
 
     return NextResponse.json({
       meeting,
-      contributions: contributions || [],
+      contributions: safeContributions || [],
       expenses: expenses || [],
       income: income || [],
       loans_issued: loansIssued,
       active_loans: activeLoans,
-      org_settings: orgSettings
+      org_settings: orgSettings,
     })
-  } catch (error) {
-    if (error instanceof Error && (error.message === 'UNAUTHENTICATED' || error.message === 'UNAUTHORIZED')) {
-      return NextResponse.json({ error: error.message }, { status: error.message === 'UNAUTHENTICATED' ? 401 : 403 })
+  } catch (error: any) {
+    if (error?.message === "UNAUTHENTICATED" || error?.message === "UNAUTHORIZED" || error?.message === "FORBIDDEN") {
+      return NextResponse.json({ error: error.message }, { status: error.message === "UNAUTHENTICATED" ? 401 : 403 })
     }
-    console.error(error)
-    return NextResponse.json({ error: 'Failed to fetch meeting details' }, { status: 500 })
+    console.error("GET /api/meetings/[id] error:", error)
+    return NextResponse.json({ error: "Failed to fetch meeting details" }, { status: 500 })
   }
 }
 
@@ -84,46 +84,40 @@ export async function PATCH(
 ) {
   try {
     const performer = await requireAdminOrAbove()
-    const supabase = await createClient()
     const { id } = await params
     const body = await req.json()
     const { notes, opening_balance } = body
 
-    const { data: meeting, error: fetchError } = await supabase
-      .from("meetings")
-      .select("*")
-      .eq("id", id)
-      .eq("organization_id", performer.organization_id)
-      .maybeSingle()
+    const meeting = await prisma.meeting.findFirst({
+      where: {
+        id,
+        organizationId: performer.organizationId,
+      },
+    })
 
-    if (fetchError) throw fetchError
     if (!meeting) {
-      return NextResponse.json({ error: 'Meeting not found' }, { status: 404 })
+      return NextResponse.json({ error: "Meeting not found" }, { status: 404 })
     }
 
-    if (meeting.status === 'FINALIZED') {
-      return NextResponse.json({ error: 'Cannot edit finalized meeting' }, { status: 400 })
+    if (meeting.status === "FINALIZED") {
+      return NextResponse.json({ error: "Cannot edit finalized meeting" }, { status: 400 })
     }
 
-    const updates: Record<string, any> = {}
-    if (notes !== undefined) updates.notes = notes
-    if (opening_balance !== undefined) updates.opening_balance = opening_balance
+    const data: any = {}
+    if (notes !== undefined) data.notes = notes
+    if (opening_balance !== undefined) data.openingBalance = BigInt(opening_balance)
 
-    const { data: updatedMeeting, error: updateError } = await supabase
-      .from("meetings")
-      .update(updates)
-      .eq("id", id)
-      .select()
-      .single()
-
-    if (updateError) throw updateError
+    const updatedMeeting = await prisma.meeting.update({
+      where: { id },
+      data,
+    })
 
     return NextResponse.json(updatedMeeting)
-  } catch (error) {
-    if (error instanceof Error && (error.message === 'UNAUTHENTICATED' || error.message === 'UNAUTHORIZED')) {
-      return NextResponse.json({ error: error.message }, { status: error.message === 'UNAUTHENTICATED' ? 401 : 403 })
+  } catch (error: any) {
+    if (error?.message === "UNAUTHENTICATED" || error?.message === "UNAUTHORIZED" || error?.message === "FORBIDDEN") {
+      return NextResponse.json({ error: error.message }, { status: error.message === "UNAUTHENTICATED" ? 401 : 403 })
     }
-    console.error(error)
-    return NextResponse.json({ error: 'Failed to update meeting' }, { status: 500 })
+    console.error("PATCH /api/meetings/[id] error:", error)
+    return NextResponse.json({ error: "Failed to update meeting" }, { status: 500 })
   }
 }

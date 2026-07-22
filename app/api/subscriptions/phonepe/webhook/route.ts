@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
-import { verifyChecksum } from "@/lib/phonepe"
+import prisma from "@/lib/prisma"
+import { verifyChecksum, PLANS } from "@/lib/phonepe"
 
 export async function POST(req: Request) {
   try {
@@ -9,7 +9,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing x-verify header" }, { status: 400 })
     }
 
-    // Capture the raw body text for verification
     const rawBody = await req.text()
     const isChecksumValid = verifyChecksum(xVerify, rawBody)
 
@@ -17,13 +16,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid checksum" }, { status: 401 })
     }
 
-    // Parse envelope body to get base64 response payload
     const body = JSON.parse(rawBody)
     if (!body.response) {
       return NextResponse.json({ error: "Invalid webhook payload structure" }, { status: 400 })
     }
 
-    // Decode base64 payload
     const decodedString = Buffer.from(body.response, "base64").toString("utf8")
     const responseData = JSON.parse(decodedString)
 
@@ -32,81 +29,61 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing merchantTransactionId in response" }, { status: 400 })
     }
 
-    const adminSupabase = createAdminClient()
+    const subscription = await prisma.subscription.findUnique({
+      where: { phonepeMerchantTransactionId: merchantTransactionId },
+      include: { organization: true },
+    })
 
-    // Find the pending subscription
-    const { data: subscription, error: subError } = await adminSupabase
-      .from("subscriptions")
-      .select(`
-        id, 
-        organization_id, 
-        plan, 
-        status,
-        organization:organizations(
-          subscription_expires_at,
-          subscription_status
-        )
-      `)
-      .eq("phonepe_merchant_transaction_id", merchantTransactionId)
-      .single()
-
-    if (subError || !subscription) {
+    if (!subscription) {
       return NextResponse.json({ error: "Subscription record not found" }, { status: 404 })
     }
 
-    // If subscription is already ACTIVE, return success immediately (idempotency)
     if (subscription.status === "ACTIVE") {
       return NextResponse.json({ success: true })
     }
 
-    const isSuccess = responseData.responseCode === "SUCCESS" || 
-      responseData.state === "COMPLETED" || 
+    const isSuccess =
+      responseData.responseCode === "SUCCESS" ||
+      responseData.state === "COMPLETED" ||
       responseData.code === "PAYMENT_SUCCESS"
 
     if (isSuccess) {
       const now = new Date()
-      const org = (subscription as any).organization
-      const currentExpiry = org?.subscription_expires_at ? new Date(org.subscription_expires_at) : null
-      const startFrom = (currentExpiry && currentExpiry > now) ? currentExpiry : now
+      const org = subscription.organization
+      const currentExpiry = org?.subscriptionExpiresAt ? new Date(org.subscriptionExpiresAt) : null
+      const startFrom = currentExpiry && currentExpiry > now ? currentExpiry : now
       const expiresAt = new Date(startFrom.getTime() + 30 * 24 * 60 * 60 * 1000)
 
-      const { PLANS } = require("@/lib/phonepe")
       const planDetails = PLANS[subscription.plan as keyof typeof PLANS]
       const maxMembers = planDetails ? planDetails.maxMembers : 10
 
-      // 1. Update subscription status
-      const { error: updateSubError } = await adminSupabase
-        .from("subscriptions")
-        .update({
-          status: "ACTIVE",
-          phonepe_transaction_id: responseData.transactionId || null,
-          payment_method: responseData.paymentInstrument?.type || null,
-          starts_at: startFrom.toISOString(),
-          expires_at: expiresAt.toISOString()
+      await prisma.$transaction(async (tx) => {
+        await tx.subscription.update({
+          where: { id: subscription.id },
+          data: {
+            status: "ACTIVE",
+            phonepeTransactionId: responseData.transactionId || null,
+            paymentMethod: responseData.paymentInstrument?.type || null,
+            startsAt: startFrom,
+            expiresAt: expiresAt,
+          },
         })
-        .eq("id", subscription.id)
 
-      if (updateSubError) throw updateSubError
-
-      // 2. Update organization status
-      const { error: updateOrgError } = await adminSupabase
-        .from("organizations")
-        .update({
-          subscription_plan: subscription.plan,
-          subscription_status: "ACTIVE",
-          subscription_expires_at: expiresAt.toISOString(),
-          max_members: maxMembers
+        await tx.organization.update({
+          where: { id: subscription.organizationId },
+          data: {
+            subscriptionPlan: subscription.plan,
+            subscriptionStatus: "ACTIVE",
+            subscriptionExpiresAt: expiresAt,
+            maxMembers: maxMembers,
+          },
         })
-        .eq("id", subscription.organization_id)
-
-      if (updateOrgError) throw updateOrgError
-
+      })
     } else {
-      // Update subscription status to FAILED
-      await adminSupabase
-        .from("subscriptions")
-        .update({ status: "FAILED" })
-        .eq("id", subscription.id)
+      await prisma.subscription.update({
+        where: { id: subscription.id },
+        data: { status: "FAILED" },
+      })
     }
 
     return NextResponse.json({ success: true })

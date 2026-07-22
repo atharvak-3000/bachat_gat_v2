@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation"
-import { requireAuth } from "@/lib/auth"
-import { createClient } from "@/lib/supabase/server"
+import { requireAuth, toSafeMember } from "@/lib/auth"
+import prisma from "@/lib/prisma"
 import LoansClient from "./LoansClient"
 
 export default async function AdminLoansPage({
-  searchParams
+  searchParams,
 }: {
   searchParams: Promise<{ tab?: string }>
 }) {
@@ -16,69 +16,64 @@ export default async function AdminLoansPage({
   }
 
   const { tab } = await searchParams
-  const supabase = await createClient()
 
-  // Fetch loans with member names and guarantor details
-  const { data: loans, error: loansError } = await supabase
-    .from("loans")
-    .select("*, member:members!loans_member_id_fkey(*), guarantor:members!guarantor_id(id, name)")
-    .eq("organization_id", performer.organization_id)
-    .order("created_at", { ascending: false })
+  const [loans, members, emis] = await Promise.all([
+    prisma.loan.findMany({
+      where: { organizationId: performer.organization_id },
+      include: {
+        member: true,
+        guarantor: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.member.findMany({
+      where: {
+        organizationId: performer.organization_id,
+        isActive: true,
+        status: "ACTIVE",
+      },
+      orderBy: { name: "asc" },
+    }),
+    prisma.loanEmi.findMany({
+      select: { loanId: true, status: true, dueDate: true },
+    }),
+  ])
 
-  if (loansError) {
-    console.error("Failed to fetch loans:", loansError)
-  }
+  const todayStr = new Date().toISOString().split("T")[0]
 
-  // Fetch active members for guarantor selection
-  const { data: members, error: membersError } = await supabase
-    .from("members")
-    .select("*")
-    .eq("organization_id", performer.organization_id)
-    .eq("is_active", true)
-    .eq("status", "ACTIVE")
-    .order("name", { ascending: true })
-
-  if (membersError) {
-    console.error("Failed to fetch members:", membersError)
-  }
-
-  // Fetch overdue EMIs for these loans
-  // Today's date in YYYY-MM-DD
-  const todayStr = new Date().toISOString().split('T')[0]
-
-  const { data: emis, error: emisError } = await supabase
-    .from("loan_emis")
-    .select("loan_id, status, due_date")
-
-  if (emisError) {
-    console.error("Failed to fetch emis:", emisError)
-  }
-
-  const loansList = loans || []
-  const emisList = emis || []
-
-  // Compute overdue count per loan
   const overdueCountMap: Record<string, number> = {}
-  loansList.forEach(l => {
-    const loanEmis = emisList.filter(e => e.loan_id === l.id)
-    const overdueCount = loanEmis.filter(e => 
-      e.status === 'OVERDUE' || (e.status !== 'PAID' && e.due_date < todayStr)
+  loans.forEach((l) => {
+    const loanEmis = emis.filter((e) => e.loanId === l.id)
+    const overdueCount = loanEmis.filter(
+      (e) => e.status === "OVERDUE" || (e.status !== "PAID" && e.dueDate.toISOString().split("T")[0] < todayStr)
     ).length
     overdueCountMap[l.id] = overdueCount
   })
 
-  // Format response data
-  const loansWithOverdue = loansList.map(l => ({
+  const safeMembers = members.map((m) => toSafeMember(m))
+
+  const loansWithOverdue = loans.map((l) => ({
     ...l,
-    overdue_count: overdueCountMap[l.id] || 0
+    organization_id: l.organizationId,
+    member_id: l.memberId,
+    guarantor_id: l.guarantorId,
+    loan_amount: Number(l.loanAmount),
+    outstanding_amount: Number(l.outstandingAmount),
+    interest_rate: Number(l.interestRate),
+    disbursed_date: l.disbursedDate.toISOString().split("T")[0],
+    term_months: l.termMonths,
+    created_at: l.createdAt.toISOString(),
+    member: toSafeMember(l.member),
+    guarantor: l.guarantor,
+    overdue_count: overdueCountMap[l.id] || 0,
   }))
 
   return (
     <LoansClient
-      loans={loansWithOverdue}
+      loans={loansWithOverdue as any}
       currentRole={performer.role}
       activeTab={tab || "all"}
-      members={members || []}
+      members={safeMembers as any}
     />
   )
 }

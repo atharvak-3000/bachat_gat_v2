@@ -1,81 +1,78 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrAbove } from "@/lib/auth"
-import { createClient } from "@/lib/supabase/server"
+import prisma from "@/lib/prisma"
+import { requireAdminOrAbove, logActivity } from "@/lib/auth"
 
 export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const params = await context.params;
+    const params = await context.params
     const admin = await requireAdminOrAbove()
-    const supabase = await createClient()
 
-    const { data: proof, error: fetchError } = await supabase
-      .from("payment_proofs")
-      .select("*")
-      .eq("id", params.id)
-      .eq("organization_id", admin.organization_id)
-      .single()
+    const proof = await prisma.paymentProof.findFirst({
+      where: {
+        id: params.id,
+        organizationId: admin.organizationId,
+      },
+    })
 
-    if (fetchError || !proof) {
+    if (!proof) {
       return NextResponse.json({ error: "Proof not found" }, { status: 404 })
     }
 
-    if (proof.status !== 'PENDING') {
+    if (proof.status !== "PENDING") {
       return NextResponse.json({ error: "Proof is not pending" }, { status: 400 })
     }
 
-    const { error: updateError } = await supabase
-      .from("payment_proofs")
-      .update({
-        status: "VERIFIED",
-        verified_by: admin.id,
-        verified_at: new Date().toISOString()
+    await prisma.$transaction(async (tx) => {
+      await tx.paymentProof.update({
+        where: { id: params.id },
+        data: {
+          status: "VERIFIED",
+          verifiedBy: admin.id,
+          verifiedAt: new Date(),
+        },
       })
-      .eq("id", params.id)
 
-    if (updateError) throw updateError
+      if (proof.meetingId) {
+        const contrib = await tx.meetingContribution.findFirst({
+          where: {
+            meetingId: proof.meetingId,
+            memberId: proof.memberId,
+          },
+        })
 
-    // Auto-match meeting contribution if meeting_id exists
-    if (proof.meeting_id) {
-      const { data: contrib } = await supabase
-        .from("meeting_contributions")
-        .select("id, savings_amount, other_amount")
-        .eq("meeting_id", proof.meeting_id)
-        .eq("member_id", proof.member_id)
-        .single()
-
-      if (contrib) {
-        // Simple logic: add to savings if not fully covered, else other
-        // Let's just add to savings for now as per instructions "Update savings_amount or other_amount"
-        await supabase
-          .from("meeting_contributions")
-          .update({ savings_amount: contrib.savings_amount + proof.amount })
-          .eq("id", contrib.id)
+        if (contrib) {
+          await tx.meetingContribution.update({
+            where: { id: contrib.id },
+            data: {
+              savingsAmount: contrib.savingsAmount + proof.amount,
+            },
+          })
+        }
       }
-    }
 
-    // Notify member
-    await supabase.from("notifications").insert({
-      organization_id: admin.organization_id,
-      member_id: proof.member_id,
-      title: "Payment Verified",
-      message: `Your payment of ₹${(proof.amount / 100).toFixed(2)} has been verified.`,
-      type: "PAYMENT_VERIFIED"
-    })
+      await tx.notification.create({
+        data: {
+          organizationId: admin.organizationId,
+          memberId: proof.memberId,
+          title: "Payment Verified",
+          message: `Your payment of ₹${(Number(proof.amount) / 100).toFixed(2)} has been verified.`,
+          type: "PAYMENT_VERIFIED",
+        },
+      })
 
-    await supabase.from("activity_logs").insert({
-      organization_id: admin.organization_id,
-      performed_by: admin.id,
-      action: "PAYMENT_VERIFIED",
-      entity_type: "payment_proofs",
-      entity_id: params.id,
-      details: { amount: proof.amount }
+      await logActivity(tx, admin.id, admin.organizationId, "PAYMENT_VERIFIED", "payment_proofs", params.id, {
+        amount: Number(proof.amount),
+      })
     })
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
+    if (error?.message === "UNAUTHENTICATED" || error?.message === "UNAUTHORIZED" || error?.message === "FORBIDDEN") {
+      return NextResponse.json({ error: error.message }, { status: error.message === "UNAUTHENTICATED" ? 401 : 403 })
+    }
     console.error("Error verifying payment proof:", error)
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }

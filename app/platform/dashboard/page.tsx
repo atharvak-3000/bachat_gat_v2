@@ -1,19 +1,14 @@
-import { createAdminClient } from "@/lib/supabase/admin"
+import prisma from "@/lib/prisma"
 
 export default async function PlatformDashboardPage() {
-  const adminClient = createAdminClient()
-
-  const [
-    { data: orgs },
-    { count: totalMembers }
-  ] = await Promise.all([
-    adminClient.from("organizations").select("*"),
-    adminClient.from("members").select("*", { count: 'exact', head: true })
+  const [orgs, totalMembers] = await Promise.all([
+    prisma.organization.findMany(),
+    prisma.member.count(),
   ])
 
-  const totalGats = orgs?.length || 0
-  const pendingGats = orgs?.filter(o => !o.is_approved).length || 0
-  const activeSubs = orgs?.filter(o => o.subscription_status === 'ACTIVE').length || 0
+  const totalGats = orgs.length
+  const pendingGats = orgs.filter((o) => !o.isApproved).length
+  const activeSubs = orgs.filter((o) => o.subscriptionStatus === "ACTIVE").length
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
@@ -34,7 +29,7 @@ export default async function PlatformDashboardPage() {
         </div>
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
           <p className="text-gray-500 text-sm uppercase tracking-wider mb-2">Total Members</p>
-          <p className="text-3xl font-bold text-blue-600">{totalMembers || 0}</p>
+          <p className="text-3xl font-bold text-blue-600">{totalMembers}</p>
         </div>
       </div>
     </div>

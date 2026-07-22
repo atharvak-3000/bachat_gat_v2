@@ -1,6 +1,13 @@
-import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import prisma from "@/lib/prisma"
 import { requireAdminOrAbove } from "@/lib/auth"
+import { z } from "zod"
+
+const incomeSchema = z.object({
+  category: z.string().optional(),
+  amount: z.number().positive("Amount must be greater than zero"),
+  description: z.string().optional(),
+})
 
 export async function POST(
   req: Request,
@@ -8,51 +15,46 @@ export async function POST(
 ) {
   try {
     const performer = await requireAdminOrAbove()
-    const supabase = await createClient()
     const { id } = await params
     const body = await req.json()
-    const { category, amount, description } = body // amount in paise
+    const parseResult = incomeSchema.safeParse(body)
 
-    if (!amount || amount <= 0) {
-      return NextResponse.json({ error: 'Amount must be greater than zero' }, { status: 400 })
+    if (!parseResult.success) {
+      return NextResponse.json({ error: parseResult.error.errors[0].message }, { status: 400 })
     }
 
-    // Check meeting status (must be DRAFT)
-    const { data: meeting, error: meetingError } = await supabase
-      .from("meetings")
-      .select("*")
-      .eq("id", id)
-      .eq("organization_id", performer.organization_id)
-      .maybeSingle()
+    const { category, amount, description } = parseResult.data
 
-    if (meetingError) throw meetingError
+    const meeting = await prisma.meeting.findFirst({
+      where: {
+        id,
+        organizationId: performer.organizationId,
+      },
+    })
+
     if (!meeting) {
-      return NextResponse.json({ error: 'Meeting not found' }, { status: 404 })
+      return NextResponse.json({ error: "Meeting not found" }, { status: 404 })
     }
 
-    if (meeting.status === 'FINALIZED') {
-      return NextResponse.json({ error: 'Cannot add income to finalized meeting' }, { status: 400 })
+    if (meeting.status === "FINALIZED") {
+      return NextResponse.json({ error: "Cannot add income to finalized meeting" }, { status: 400 })
     }
 
-    const { data: income, error: insertError } = await supabase
-      .from("meeting_income")
-      .insert({
-        meeting_id: id,
-        category: category || 'OTHER',
-        amount,
-        description: description || ''
-      })
-      .select()
-      .single()
-
-    if (insertError) throw insertError
+    const income = await prisma.meetingIncome.create({
+      data: {
+        meetingId: id,
+        category: category || "OTHER",
+        amount: BigInt(amount),
+        description: description || "",
+      },
+    })
 
     return NextResponse.json(income)
-  } catch (error) {
-    if (error instanceof Error && (error.message === 'UNAUTHENTICATED' || error.message === 'UNAUTHORIZED')) {
-      return NextResponse.json({ error: error.message }, { status: error.message === 'UNAUTHENTICATED' ? 401 : 403 })
+  } catch (error: any) {
+    if (error?.message === "UNAUTHENTICATED" || error?.message === "UNAUTHORIZED" || error?.message === "FORBIDDEN") {
+      return NextResponse.json({ error: error.message }, { status: error.message === "UNAUTHENTICATED" ? 401 : 403 })
     }
     console.error(error)
-    return NextResponse.json({ error: 'Failed to add income' }, { status: 500 })
+    return NextResponse.json({ error: "Failed to add income" }, { status: 500 })
   }
 }

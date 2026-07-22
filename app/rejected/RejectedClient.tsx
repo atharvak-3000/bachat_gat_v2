@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
 
 export default function RejectedClient({
   orgName,
@@ -52,8 +51,7 @@ export default function RejectedClient({
   const t = T[lang]
 
   const handleSignOut = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
+    await fetch('/api/auth/logout', { method: 'POST' })
     router.push('/sign-in')
   }
 

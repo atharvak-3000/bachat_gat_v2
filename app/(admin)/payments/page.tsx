@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
-import { requireAdminOrAbove } from "@/lib/auth"
-import { createClient } from "@/lib/supabase/server"
+import { requireAdminOrAbove, toSafeMember } from "@/lib/auth"
+import prisma from "@/lib/prisma"
 import AdminPaymentsClient from "./AdminPaymentsClient"
 
 export default async function AdminPaymentsPage() {
@@ -11,17 +11,28 @@ export default async function AdminPaymentsPage() {
     redirect("/sign-in")
   }
 
-  const supabase = await createClient()
+  const proofs = await prisma.paymentProof.findMany({
+    where: { organizationId: currentAdmin.organization_id },
+    include: {
+      member: { select: { name: true, memberNumber: true } },
+      meeting: { select: { monthYear: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  })
 
-  const { data: proofs, error } = await supabase
-    .from("payment_proofs")
-    .select("*, member:members(name, member_number), meeting:meetings(month_year)")
-    .eq("organization_id", currentAdmin.organization_id)
-    .order("created_at", { ascending: false })
+  const safeProofs = proofs.map((p) => ({
+    ...p,
+    organization_id: p.organizationId,
+    member_id: p.memberId,
+    meeting_id: p.meetingId,
+    amount: Number(p.amount),
+    upi_reference: p.upiReference,
+    screenshot_url: p.screenshotUrl,
+    rejection_reason: p.rejectionReason,
+    created_at: p.createdAt.toISOString(),
+    member: p.member ? { name: p.member.name, member_number: p.member.memberNumber } : null,
+    meeting: p.meeting ? { month_year: p.meeting.monthYear } : null,
+  }))
 
-  if (error) {
-    console.error("Error fetching proofs:", error)
-  }
-
-  return <AdminPaymentsClient proofs={proofs || []} />
+  return <AdminPaymentsClient proofs={safeProofs as any} />
 }

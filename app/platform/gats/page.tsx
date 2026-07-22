@@ -1,18 +1,22 @@
-import { createAdminClient } from "@/lib/supabase/admin"
+import prisma from "@/lib/prisma"
 import GatsClient from "./GatsClient"
 
 export default async function PlatformGatsPage() {
-  const adminClient = createAdminClient()
+  const orgs = await prisma.organization.findMany({
+    include: {
+      members: { select: { id: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  })
 
-  const { data: orgs } = await adminClient
-    .from("organizations")
-    .select("*, members(id)")
-    .order("created_at", { ascending: false })
-
-  const formattedOrgs = (orgs || []).map(org => ({
+  const formattedOrgs = orgs.map((org) => ({
     ...org,
-    members_count: org.members?.length || 0
+    is_approved: org.isApproved,
+    group_code: org.groupCode,
+    subscription_status: org.subscriptionStatus,
+    created_at: org.createdAt.toISOString(),
+    members_count: org.members.length,
   }))
 
-  return <GatsClient initialOrgs={formattedOrgs} />
+  return <GatsClient initialOrgs={formattedOrgs as any} />
 }

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
-import { requireAuth } from "@/lib/auth"
-import { createClient } from "@/lib/supabase/server"
+import { requireAuth, toSafeMember } from "@/lib/auth"
+import prisma from "@/lib/prisma"
 import { calcMemberStats, formatRupees, formatMonthYear } from "@/lib/calculations"
 import type { MeetingContribution, Meeting, Loan, LoanEmi, Member } from "@/types"
 import { cookies } from "next/headers"
@@ -18,105 +18,131 @@ export default async function MemberPage() {
     redirect("/sign-in")
   }
 
-  const supabase = await createClient()
+  const [contribs, loans] = await Promise.all([
+    prisma.meetingContribution.findMany({
+      where: { memberId: performer.id },
+      include: { meeting: true },
+    }),
+    prisma.loan.findMany({
+      where: { memberId: performer.id },
+    }),
+  ])
 
-  // Fetch Member contributions
-  const { data: contribs, error: contribsError } = await supabase
-    .from("meeting_contributions")
-    .select("*, meeting:meetings(*)")
-    .eq("member_id", performer.id)
+  const memberContribs = contribs.map((c) => ({
+    ...c,
+    meeting_id: c.meetingId,
+    member_id: c.memberId,
+    savings_amount: Number(c.savingsAmount),
+    loan_repayment: Number(c.loanRepayment),
+    interest_paid: Number(c.interestPaid),
+    penalty_paid: Number(c.penaltyPaid),
+    other_amount: Number(c.otherAmount),
+    is_present: c.isPresent,
+    meeting: {
+      ...c.meeting,
+      organization_id: c.meeting.organizationId,
+      month_year: c.meeting.monthYear,
+      meeting_date: c.meeting.meetingDate.toISOString().split("T")[0],
+      opening_balance: Number(c.meeting.openingBalance),
+      created_at: c.meeting.createdAt.toISOString(),
+    },
+  })) as unknown as (MeetingContribution & { meeting: Meeting })[]
 
-  if (contribsError) console.error(contribsError)
+  const memberLoans = loans.map((l) => ({
+    ...l,
+    organization_id: l.organizationId,
+    member_id: l.memberId,
+    guarantor_id: l.guarantorId,
+    loan_amount: Number(l.loanAmount),
+    outstanding_amount: Number(l.outstandingAmount),
+    interest_rate: Number(l.interestRate),
+    disbursed_date: l.disbursedDate.toISOString().split("T")[0],
+    term_months: l.termMonths,
+    created_at: l.createdAt.toISOString(),
+  })) as unknown as Loan[]
 
-  // Fetch Member loans
-  const { data: loans, error: loansError } = await supabase
-    .from("loans")
-    .select("*")
-    .eq("member_id", performer.id)
-
-  if (loansError) console.error(loansError)
-
-  const memberContribs = (contribs || []) as (MeetingContribution & { meeting: Meeting })[]
-  const memberLoans = (loans || []) as Loan[]
-
-  // Compute personal stats
   const stats = calcMemberStats(
-    memberContribs.map(c => ({
+    memberContribs.map((c) => ({
       savings_amount: c.savings_amount,
       interest_paid: c.interest_paid,
-      is_present: c.is_present
+      is_present: c.is_present,
     })),
-    memberLoans.map(l => ({
+    memberLoans.map((l) => ({
       outstanding_amount: l.outstanding_amount,
-      status: l.status
+      status: l.status,
     }))
   )
 
-  // Find active loan details (if any)
-  const activeLoan = memberLoans.find(l => l.status === 'ACTIVE')
+  const activeLoan = memberLoans.find((l) => l.status === "ACTIVE")
   let nextEmi: LoanEmi | null = null
   let overdueEmiCount = 0
   let emiProgressPercent = 0
 
   if (activeLoan) {
-    const { data: emis } = await supabase
-      .from("loan_emis")
-      .select("*")
-      .eq("loan_id", activeLoan.id)
-      .order("month_year", { ascending: true })
+    const emis = await prisma.loanEmi.findMany({
+      where: { loanId: activeLoan.id },
+      orderBy: { monthYear: "asc" },
+    })
 
-    const loanEmis = (emis || []) as LoanEmi[]
-    const todayStr = new Date().toISOString().split('T')[0]
+    const loanEmis = emis.map((e) => ({
+      ...e,
+      loan_id: e.loanId,
+      month_year: e.monthYear,
+      due_date: e.dueDate.toISOString().split("T")[0],
+      principal_due: Number(e.principalDue),
+      interest_due: Number(e.interestDue),
+      principal_paid: Number(e.principalPaid),
+      interest_paid: Number(e.interestPaid),
+      fine_amount: Number(e.fineAmount),
+      paid_at: e.paidAt ? e.paidAt.toISOString() : null,
+    })) as unknown as LoanEmi[]
 
-    // Find next pending EMI
-    nextEmi = loanEmis.find(e => e.status !== 'PAID') || null
-    
-    // Count overdue
-    overdueEmiCount = loanEmis.filter(e => 
-      e.status === 'OVERDUE' || (e.status !== 'PAID' && e.due_date < todayStr)
+    const todayStr = new Date().toISOString().split("T")[0]
+
+    nextEmi = loanEmis.find((e) => e.status !== "PAID") || null
+
+    overdueEmiCount = loanEmis.filter(
+      (e) => e.status === "OVERDUE" || (e.status !== "PAID" && e.due_date < todayStr)
     ).length
 
-    // Repaid percentage
     emiProgressPercent = Math.min(
       100,
       Math.round(((activeLoan.loan_amount - activeLoan.outstanding_amount) / activeLoan.loan_amount) * 100)
     )
   }
 
-  // Fetch transparency org-wide stats
-  // First get all member IDs of this organization
-  const { data: orgMembers } = await supabase
-    .from("members")
-    .select("id")
-    .eq("organization_id", performer.organization_id)
+  const orgMembers = await prisma.member.findMany({
+    where: { organizationId: performer.organization_id },
+    select: { id: true },
+  })
 
-  const memberIds = (orgMembers || []).map(m => m.id)
+  const memberIds = orgMembers.map((m) => m.id)
 
   let orgSavings = 0
   let orgInterest = 0
   let orgFines = 0
 
   if (memberIds.length > 0) {
-    const { data: orgContribs } = await supabase
-      .from("meeting_contributions")
-      .select("savings_amount, interest_paid, penalty_paid")
-      .in("member_id", memberIds)
+    const orgContribs = await prisma.meetingContribution.findMany({
+      where: { memberId: { in: memberIds } },
+      select: { savingsAmount: true, interestPaid: true, penaltyPaid: true },
+    })
 
-    const cList = orgContribs || []
-    orgSavings = cList.reduce((sum, c) => sum + (c.savings_amount || 0), 0)
-    orgInterest = cList.reduce((sum, c) => sum + (c.interest_paid || 0), 0)
-    orgFines = cList.reduce((sum, c) => sum + (c.penalty_paid || 0), 0)
+    orgSavings = orgContribs.reduce((sum, c) => sum + Number(c.savingsAmount), 0)
+    orgInterest = orgContribs.reduce((sum, c) => sum + Number(c.interestPaid), 0)
+    orgFines = orgContribs.reduce((sum, c) => sum + Number(c.penaltyPaid), 0)
   }
 
-  const { data: activeOrgLoans } = await supabase
-    .from("loans")
-    .select("outstanding_amount")
-    .eq("organization_id", performer.organization_id)
-    .eq("status", "ACTIVE")
+  const activeOrgLoans = await prisma.loan.findMany({
+    where: {
+      organizationId: performer.organization_id,
+      status: "ACTIVE",
+    },
+    select: { outstandingAmount: true },
+  })
 
-  const orgLoansOut = (activeOrgLoans || []).reduce((sum, l) => sum + (l.outstanding_amount || 0), 0)
+  const orgLoansOut = activeOrgLoans.reduce((sum, l) => sum + Number(l.outstandingAmount), 0)
 
-  // Sort contributions history (last 12)
   const sortedContributions = [...memberContribs]
     .sort((a, b) => new Date(b.meeting.meeting_date).getTime() - new Date(a.meeting.meeting_date).getTime())
     .slice(0, 12)
@@ -142,9 +168,9 @@ export default async function MemberPage() {
           </div>
           <div className="bg-white/10 border border-white/20 rounded-xl p-3 md:p-4 text-center flex flex-col justify-center items-center">
             <p className="text-blue-200 text-xs uppercase tracking-wide mb-1">{t("kyc")}</p>
-            {performer.kyc_status === 'VERIFIED' ? (
+            {performer.kyc_status === "VERIFIED" ? (
               <span className="text-green-300 font-semibold">{t("verified")}</span>
-            ) : performer.kyc_status === 'REJECTED' ? (
+            ) : performer.kyc_status === "REJECTED" ? (
               <span className="text-red-300 font-semibold">{t("rejected")}</span>
             ) : (
               <span className="text-[#E85D26] font-semibold">{t("pending")}</span>
@@ -154,17 +180,15 @@ export default async function MemberPage() {
       </div>
 
       {/* KYC Warning/Status Card */}
-      {performer.kyc_status !== 'VERIFIED' && (
+      {performer.kyc_status !== "VERIFIED" && (
         <div className="bg-orange-50 dark:bg-orange-950/20 border-l-4 border-[#E85D26] rounded-xl p-4 flex items-start gap-3">
           <span className="text-xl text-[#E85D26]">⚠️</span>
           <div>
             <p className="text-[#1B2B6B] dark:text-white font-semibold">
-              {performer.kyc_status === 'REJECTED' ? t("kycNotApproved") : t("completeKyc")}
+              {performer.kyc_status === "REJECTED" ? t("kycNotApproved") : t("completeKyc")}
             </p>
             <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">
-              {performer.kyc_status === 'REJECTED' 
-                ? t("kycNotApprovedDesc") 
-                : t("completeKycDesc")}
+              {performer.kyc_status === "REJECTED" ? t("kycNotApprovedDesc") : t("completeKycDesc")}
             </p>
           </div>
         </div>
@@ -205,7 +229,7 @@ export default async function MemberPage() {
           <div className="border-b border-gray-100 dark:border-gray-800 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <h2 className="text-lg font-bold text-[#1B2B6B] dark:text-white">{t("activeLoanRepayment")}</h2>
-              <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">{t("disbursedOn")} {new Date(activeLoan.disbursed_date).toLocaleDateString('en-IN')}</p>
+              <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">{t("disbursedOn")} {new Date(activeLoan.disbursed_date).toLocaleDateString("en-IN")}</p>
             </div>
             {overdueEmiCount > 0 && (
               <span className="inline-flex px-3 py-1 rounded-full text-xs font-bold bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900/30 animate-pulse">
@@ -215,8 +239,6 @@ export default async function MemberPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
-            {/* Progress */}
             <div className="md:col-span-2 space-y-4">
               <div className="space-y-2">
                 <div className="flex justify-between text-xs font-bold text-gray-500 dark:text-gray-400">
@@ -224,7 +246,7 @@ export default async function MemberPage() {
                   <span className="text-[#E85D26] dark:text-orange-400">{emiProgressPercent}% {t("paid")}</span>
                 </div>
                 <div className="w-full h-3.5 bg-gray-100 dark:bg-gray-950 rounded-full overflow-hidden">
-                  <div 
+                  <div
                     className="h-full bg-[#1B2B6B] dark:bg-blue-600 rounded-full transition-all duration-300"
                     style={{ width: `${emiProgressPercent}%` }}
                   />
@@ -247,11 +269,10 @@ export default async function MemberPage() {
               </div>
             </div>
 
-            {/* Next EMI summary */}
             {nextEmi && (
               <div className="bg-[#E85D26]/5 dark:bg-[#E85D26]/5 border border-[#E85D26]/20 dark:border-orange-950/30 p-5 rounded-2xl space-y-4">
                 <span className="text-[10px] font-bold text-[#E85D26] dark:text-orange-400 uppercase tracking-wider">{t("nextEmiDue")}</span>
-                
+
                 <div className="space-y-2 text-xs font-medium text-gray-600 dark:text-gray-300">
                   <div className="flex justify-between">
                     <span>{t("month")}</span>
@@ -265,9 +286,9 @@ export default async function MemberPage() {
                     <span>{t("interest")}</span>
                     <strong className="text-gray-800 dark:text-white">{formatRupees(nextEmi.interest_due - nextEmi.interest_paid)}</strong>
                   </div>
-                  
+
                   <hr className="border-[#E85D26]/20 dark:border-orange-950/20" />
-                  
+
                   <div className="flex justify-between text-sm font-extrabold text-[#E85D26] dark:text-orange-400">
                     <span>{t("totalDue")}</span>
                     <span>{formatRupees((nextEmi.principal_due - nextEmi.principal_paid) + (nextEmi.interest_due - nextEmi.interest_paid))}</span>
@@ -275,22 +296,19 @@ export default async function MemberPage() {
                 </div>
 
                 <div className="text-[10px] text-gray-400 dark:text-gray-500 font-medium text-center">
-                  {t("dueOn")}: {new Date(nextEmi.due_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                  {t("dueOn")}: {new Date(nextEmi.due_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
                 </div>
               </div>
             )}
-
           </div>
         </div>
       )}
 
       {/* Grid: Contributions History & Transparency */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Contributions table */}
         <div className="lg:col-span-2 bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-2xl p-6 shadow-sm space-y-4">
           <h2 className="text-lg font-bold text-[#1B2B6B] dark:text-white border-b border-gray-50 dark:border-gray-800 pb-3">{t("mySavingsHistory")}</h2>
-          
+
           {sortedContributions.length === 0 ? (
             <p className="text-gray-400 dark:text-gray-500 text-xs italic py-6 text-center">{t("noContributions")}</p>
           ) : (
@@ -307,7 +325,7 @@ export default async function MemberPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800 font-medium text-gray-700 dark:text-gray-300">
-                  {sortedContributions.map((c, idx) => (
+                  {sortedContributions.map((c) => (
                     <tr key={c.id} className="odd:bg-white odd:dark:bg-[#1A1D27] even:bg-gray-50 even:dark:bg-gray-950/30 hover:bg-blue-50/40 dark:hover:bg-blue-950/10 transition-colors border-b border-gray-100 dark:border-gray-800">
                       <td className="px-3 py-3 font-bold text-gray-900 dark:text-white">{formatMonthYear(c.meeting.month_year)}</td>
                       <td className="px-3 py-3 text-center">
@@ -329,7 +347,6 @@ export default async function MemberPage() {
           )}
         </div>
 
-        {/* Transparency Section */}
         <div className="lg:col-span-1 bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-2xl p-6 shadow-sm space-y-4">
           <div className="border-b border-gray-50 dark:border-gray-800 pb-3">
             <h2 className="text-lg font-bold text-[#1B2B6B] dark:text-white">📊 {t("gatTransparency")}</h2>
@@ -355,10 +372,8 @@ export default async function MemberPage() {
             </div>
           </div>
         </div>
-
       </div>
 
-      {/* Log Out */}
       <SignOutButton t={t} />
     </div>
   )
@@ -367,7 +382,7 @@ export default async function MemberPage() {
 function SignOutButton({ t }: { t: any }) {
   return (
     <form action="/auth/signout" method="post">
-      <button 
+      <button
         type="submit"
         className="w-full py-3.5 border border-red-200 dark:border-red-900/30 text-red-500 dark:text-red-400 rounded-2xl text-xs font-bold hover:bg-red-50 dark:hover:bg-red-950/20 active:scale-95 transition"
       >

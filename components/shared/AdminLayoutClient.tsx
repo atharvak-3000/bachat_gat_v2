@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
 import NotificationBell from "./NotificationBell"
 import DarkModeToggle from "../ui/DarkModeToggle"
 import type { MemberWithOrg } from "@/types"
@@ -99,8 +98,7 @@ export default function AdminLayoutClient({
     : navItems
 
   const signOut = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
+    await fetch('/api/auth/logout', { method: 'POST' })
     router.push('/sign-in')
   }
 

@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
-import { generateStatusChecksum, MERCHANT_ID, BASE_URL } from "@/lib/phonepe"
+import prisma from "@/lib/prisma"
+import { generateStatusChecksum, MERCHANT_ID, BASE_URL, PLANS } from "@/lib/phonepe"
 
 export async function GET(req: Request) {
   const host = req.headers.get("x-forwarded-host") || req.headers.get("host")
   const proto = req.headers.get("x-forwarded-proto") || "http"
-  const appUrl = host 
-    ? `${proto}://${host}` 
-    : (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000")
-  
+  const appUrl = host
+    ? `${proto}://${host}`
+    : process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+
   try {
     const { searchParams } = new URL(req.url)
     const transactionId = searchParams.get("transactionId")
@@ -17,104 +17,83 @@ export async function GET(req: Request) {
       return NextResponse.redirect(`${appUrl}/subscribe?payment=failed&reason=no_transaction_id`, 303)
     }
 
-    const adminSupabase = createAdminClient()
+    const subscription = await prisma.subscription.findUnique({
+      where: { phonepeMerchantTransactionId: transactionId },
+      include: { organization: true },
+    })
 
-    // Retrieve subscription details to check current status
-    const { data: subscription, error: subError } = await adminSupabase
-      .from("subscriptions")
-      .select(`
-        id, 
-        organization_id, 
-        plan, 
-        status,
-        organization:organizations(
-          subscription_expires_at,
-          subscription_status
-        )
-      `)
-      .eq("phonepe_merchant_transaction_id", transactionId)
-      .single()
-
-    if (subError || !subscription) {
+    if (!subscription) {
       return NextResponse.redirect(`${appUrl}/subscribe?payment=failed&reason=subscription_not_found`, 303)
     }
 
-    // If already updated to ACTIVE by webhook, redirect to success directly
     if (subscription.status === "ACTIVE") {
       return NextResponse.redirect(`${appUrl}/dashboard?payment=success`, 303)
     }
 
-    // Query PhonePe Status API
     const checksum = generateStatusChecksum(transactionId)
     const response = await fetch(`${BASE_URL}/pg/v1/status/${MERCHANT_ID}/${transactionId}`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
         "X-VERIFY": checksum,
-        "X-MERCHANT-ID": MERCHANT_ID
-      }
+        "X-MERCHANT-ID": MERCHANT_ID,
+      },
     })
 
     if (!response.ok) {
-      // API call failed, mark subscription as FAILED
-      await adminSupabase
-        .from("subscriptions")
-        .update({ status: "FAILED" })
-        .eq("id", subscription.id)
-
+      await prisma.subscription.update({
+        where: { id: subscription.id },
+        data: { status: "FAILED" },
+      })
       return NextResponse.redirect(`${appUrl}/subscribe?payment=failed&reason=status_check_failed`, 303)
     }
 
     const responseData = await response.json()
-    const isSuccess = responseData.success === true && 
-      (responseData.code === "PAYMENT_SUCCESS" || responseData.data?.responseCode === "SUCCESS" || responseData.data?.state === "COMPLETED")
+    const isSuccess =
+      responseData.success === true &&
+      (responseData.code === "PAYMENT_SUCCESS" ||
+        responseData.data?.responseCode === "SUCCESS" ||
+        responseData.data?.state === "COMPLETED")
 
     if (isSuccess) {
       const now = new Date()
-      const org = (subscription as any).organization
-      const currentExpiry = org?.subscription_expires_at ? new Date(org.subscription_expires_at) : null
-      const startFrom = (currentExpiry && currentExpiry > now) ? currentExpiry : now
+      const org = subscription.organization
+      const currentExpiry = org?.subscriptionExpiresAt ? new Date(org.subscriptionExpiresAt) : null
+      const startFrom = currentExpiry && currentExpiry > now ? currentExpiry : now
       const expiresAt = new Date(startFrom.getTime() + 30 * 24 * 60 * 60 * 1000)
 
-      const { PLANS } = require("@/lib/phonepe")
       const planDetails = PLANS[subscription.plan as keyof typeof PLANS]
       const maxMembers = planDetails ? planDetails.maxMembers : 10
 
-      // 1. Update subscription status
-      const { error: updateSubError } = await adminSupabase
-        .from("subscriptions")
-        .update({
-          status: "ACTIVE",
-          phonepe_transaction_id: responseData.data?.transactionId || null,
-          payment_method: responseData.data?.paymentInstrument?.type || null,
-          starts_at: startFrom.toISOString(),
-          expires_at: expiresAt.toISOString()
+      await prisma.$transaction(async (tx) => {
+        await tx.subscription.update({
+          where: { id: subscription.id },
+          data: {
+            status: "ACTIVE",
+            phonepeTransactionId: responseData.data?.transactionId || null,
+            paymentMethod: responseData.data?.paymentInstrument?.type || null,
+            startsAt: startFrom,
+            expiresAt: expiresAt,
+          },
         })
-        .eq("id", subscription.id)
 
-      if (updateSubError) throw updateSubError
-
-      // 2. Update organization status
-      const { error: updateOrgError } = await adminSupabase
-        .from("organizations")
-        .update({
-          subscription_plan: subscription.plan,
-          subscription_status: "ACTIVE",
-          subscription_expires_at: expiresAt.toISOString(),
-          max_members: maxMembers
+        await tx.organization.update({
+          where: { id: subscription.organizationId },
+          data: {
+            subscriptionPlan: subscription.plan,
+            subscriptionStatus: "ACTIVE",
+            subscriptionExpiresAt: expiresAt,
+            maxMembers: maxMembers,
+          },
         })
-        .eq("id", subscription.organization_id)
-
-      if (updateOrgError) throw updateOrgError
+      })
 
       return NextResponse.redirect(`${appUrl}/dashboard?payment=success`, 303)
     } else {
-      // Payment failed at PhonePe
-      await adminSupabase
-        .from("subscriptions")
-        .update({ status: "FAILED" })
-        .eq("id", subscription.id)
-
+      await prisma.subscription.update({
+        where: { id: subscription.id },
+        data: { status: "FAILED" },
+      })
       return NextResponse.redirect(`${appUrl}/subscribe?payment=failed`, 303)
     }
   } catch (error: any) {

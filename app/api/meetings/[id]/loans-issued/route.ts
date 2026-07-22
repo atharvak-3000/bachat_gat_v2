@@ -1,7 +1,17 @@
-import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { requireSuperAdmin, requireAdminOrAbove, logActivity } from "@/lib/auth"
+import prisma from "@/lib/prisma"
+import { requireAdminOrAbove, logActivity } from "@/lib/auth"
 import { calcEmiSchedule } from "@/lib/calculations"
+import { z } from "zod"
+
+const loanIssuedSchema = z.object({
+  member_id: z.string().min(1, "member_id is required"),
+  amount: z.number().positive("amount is required and must be positive"),
+  interest_rate: z.number().optional(),
+  purpose: z.string().optional(),
+  term_months: z.number().optional(),
+  guarantor_id: z.string().optional(),
+})
 
 export async function POST(
   req: Request,
@@ -9,216 +19,175 @@ export async function POST(
 ) {
   try {
     const performer = await requireAdminOrAbove()
-    const supabase = await createClient()
     const { id: meetingId } = await params
     const body = await req.json()
-    const { member_id, amount, interest_rate, purpose, term_months, guarantor_id } = body
+    const parseResult = loanIssuedSchema.safeParse(body)
 
-    // Validate required fields
-    if (!member_id || !amount || amount <= 0) {
-      return NextResponse.json(
-        { error: 'member_id and amount are required' },
-        { status: 400 }
-      )
+    if (!parseResult.success) {
+      return NextResponse.json({ error: parseResult.error.errors[0].message }, { status: 400 })
     }
+
+    const { member_id, amount, interest_rate, purpose, term_months, guarantor_id } = parseResult.data
 
     if (guarantor_id) {
       if (member_id === guarantor_id) {
+        return NextResponse.json({ error: "Applicant cannot be their own guarantor" }, { status: 400 })
+      }
+
+      const guarantorMember = await prisma.member.findUnique({
+        where: { id: guarantor_id },
+      })
+
+      if (!guarantorMember) {
+        return NextResponse.json({ error: "Guarantor not found" }, { status: 404 })
+      }
+
+      if (guarantorMember.organizationId !== performer.organizationId) {
+        return NextResponse.json({ error: "Guarantor must be in the same organization" }, { status: 403 })
+      }
+
+      const isGuarantorActive = guarantorMember.isActive && guarantorMember.status === "ACTIVE"
+      if (!isGuarantorActive) {
+        return NextResponse.json({ error: "Guarantor is not active" }, { status: 400 })
+      }
+
+      const guaranteedLoansCount = await prisma.loan.count({
+        where: {
+          guarantorId: guarantor_id,
+          status: { in: ["ACTIVE", "PENDING"] },
+        },
+      })
+
+      const limit = performer.organization.maxGuarantorLoans ?? 3
+      if (guaranteedLoansCount >= limit) {
         return NextResponse.json(
-          { error: 'Applicant cannot be their own guarantor' },
+          {
+            error: "GUARANTOR_LIMIT_REACHED",
+            message: `This member is already guarantor for ${guaranteedLoansCount} loans (max allowed: ${limit})`,
+          },
           { status: 400 }
         )
       }
-      const { data: guarantorMember } = await supabase
-        .from('members')
-        .select('id, name, status, is_active, organization_id')
-        .eq('id', guarantor_id)
-        .maybeSingle()
-
-      if (!guarantorMember) {
-        return NextResponse.json({ error: 'Guarantor not found' }, { status: 404 })
-      }
-
-      if (guarantorMember.organization_id !== performer.organization_id) {
-        return NextResponse.json(
-          { error: 'Guarantor must be in the same organization' },
-          { status: 403 }
-        )
-      }
-
-      const isGuarantorActive = guarantorMember.is_active !== false &&
-        (!guarantorMember.status || guarantorMember.status === 'ACTIVE')
-
-      if (!isGuarantorActive) {
-        return NextResponse.json({ error: 'Guarantor is not active' }, { status: 400 })
-      }
-
-      // Count guarantor's current active/pending loans they are guaranteeing
-      const { count: guaranteedLoansCount, error: countError } = await supabase
-        .from('loans')
-        .select('id', { count: 'exact', head: true })
-        .eq('guarantor_id', guarantor_id)
-        .in('status', ['ACTIVE', 'PENDING'])
-
-      if (countError) throw countError
-
-      const limit = performer.organization.max_guarantor_loans ?? 3
-      if ((guaranteedLoansCount ?? 0) >= limit) {
-        return NextResponse.json({
-          error: 'GUARANTOR_LIMIT_REACHED',
-          message: `This member is already guarantor for ${guaranteedLoansCount} loans (max allowed: ${limit})`
-        }, { status: 400 })
-      }
     }
 
-    // Get meeting — must be DRAFT and same org
-    const { data: meeting } = await supabase
-      .from('meetings')
-      .select('id, status, organization_id, meeting_date')
-      .eq('id', meetingId)
-      .eq('organization_id', performer.organization_id)
-      .single()
-
-    if (!meeting) return NextResponse.json(
-      { error: 'Meeting not found' }, { status: 404 }
-    )
-    if (meeting.status === 'FINALIZED') return NextResponse.json(
-      { error: 'Cannot edit finalized meeting' }, { status: 400 }
-    )
-
-    // Get target member — NO is_active filter in query
-    const { data: targetMember, error: targetError } = await supabase
-      .from('members')
-      .select('id, name, status, is_active, organization_id')
-      .eq('id', member_id)
-      .maybeSingle()
-
-    if (targetError) {
-      console.error('[LOANS_ISSUED_DEBUG] Query error:', targetError)
-      throw targetError
-    }
-
-    if (!targetMember) {
-      return NextResponse.json(
-        { error: 'Member not found' },
-        { status: 404 }
-      )
-    }
-
-    // Step 3: Org check using string comparison (both must be non-null and equal)
-    if (!targetMember.organization_id || !performer.organization_id ||
-        targetMember.organization_id !== performer.organization_id) {
-      console.error('[LOANS_ISSUED_DEBUG] Tenant mismatch:', {
-        target_org: targetMember.organization_id,
-        performer_org: performer.organization_id
-      })
-      return NextResponse.json(
-        { error: 'Member not found in your organization' },
-        { status: 403 }
-      )
-    }
-
-    // Treat null as active (backward compat)
-    const isActive = targetMember.is_active !== false &&
-      (!targetMember.status || targetMember.status === 'ACTIVE')
-
-    if (!isActive) {
-      return NextResponse.json(
-        { error: 'Member is not active' },
-        { status: 400 }
-      )
-    }
-
-    // Check no existing active loan
-    const { data: existingLoan } = await supabase
-      .from('loans')
-      .select('id')
-      .eq('member_id', member_id)
-      .eq('organization_id', performer.organization_id)
-      .eq('status', 'ACTIVE')
-      .maybeSingle()
-
-    if (existingLoan) return NextResponse.json(
-      { error: 'Member already has an active loan' },
-      { status: 400 }
-    )
-
-    // Convert amount to paise
-    const loanAmountPaise = Number(amount)
-
-    // Check max loan limit
-    if (performer.organization.max_loan_limit > 0 &&
-        loanAmountPaise > performer.organization.max_loan_limit) {
-      return NextResponse.json(
-        { error: `Exceeds max loan limit of ₹${
-            performer.organization.max_loan_limit / 100
-          }` },
-        { status: 400 }
-      )
-    }
-
-    // Determine status based on role
-    const loanStatus = performer.role === 'SUPERADMIN'
-      ? 'ACTIVE' : 'PENDING'
-
-    // Insert loan
-    const { data: loan, error: loanError } = await supabase
-      .from('loans')
-      .insert({
-        organization_id: performer.organization_id,
-        member_id,
-        guarantor_id: guarantor_id || null,
-        loan_amount: loanAmountPaise,
-        outstanding_amount: loanAmountPaise,
-        interest_rate: Number(interest_rate) || 2.0,
-        disbursed_date: meeting.meeting_date,
-        purpose: purpose || '',
-        term_months: Number(term_months) || 12,
-        status: loanStatus,
-        requested_by: performer.id,
-        approved_by: loanStatus === 'ACTIVE' ? performer.id : null,
-        approved_at: loanStatus === 'ACTIVE' ? new Date().toISOString() : null,
-      })
-      .select()
-      .single()
-
-    if (loanError) throw loanError
-
-    // If ACTIVE (SuperAdmin issued): generate EMI schedule
-    if (loanStatus === 'ACTIVE') {
-      const emis = calcEmiSchedule(
-        loanAmountPaise,
-        Number(interest_rate) || 2.0,
-        Number(term_months) || 12,
-        new Date(meeting.meeting_date)
-      )
-      const emisWithLoanId = emis.map(e => ({
-        ...e, loan_id: loan.id
-      }))
-      await supabase.from('loan_emis').insert(emisWithLoanId)
-    }
-
-    // Log activity
-    await logActivity(supabase, performer.id, performer.organization_id, 'LOAN_ISSUED', 'loan', loan.id, {
-      member_name: targetMember.name,
-      amount: loanAmountPaise,
-      status: loanStatus
+    const meeting = await prisma.meeting.findFirst({
+      where: {
+        id: meetingId,
+        organizationId: performer.organizationId,
+      },
     })
 
-    if (guarantor_id) {
-      await logActivity(supabase, performer.id, performer.organization_id, 'GUARANTOR_ASSIGNED', 'loan', loan.id, {
-        member_id,
-        guarantor_id,
-        loan_id: loan.id
-      })
+    if (!meeting) return NextResponse.json({ error: "Meeting not found" }, { status: 404 })
+    if (meeting.status === "FINALIZED") return NextResponse.json({ error: "Cannot edit finalized meeting" }, { status: 400 })
+
+    const targetMember = await prisma.member.findUnique({
+      where: { id: member_id },
+    })
+
+    if (!targetMember) {
+      return NextResponse.json({ error: "Member not found" }, { status: 404 })
     }
 
-    return NextResponse.json(loan)
+    if (targetMember.organizationId !== performer.organizationId) {
+      return NextResponse.json({ error: "Member not found in your organization" }, { status: 403 })
+    }
 
+    if (!targetMember.isActive || targetMember.status !== "ACTIVE") {
+      return NextResponse.json({ error: "Member is not active" }, { status: 400 })
+    }
+
+    const existingLoan = await prisma.loan.findFirst({
+      where: {
+        memberId: member_id,
+        organizationId: performer.organizationId,
+        status: "ACTIVE",
+      },
+    })
+
+    if (existingLoan) return NextResponse.json({ error: "Member already has an active loan" }, { status: 400 })
+
+    const loanAmountPaise = BigInt(amount)
+
+    const maxLimit = BigInt(performer.organization.max_loan_limit || performer.organization.maxLoanLimit || 0)
+
+    if (
+      maxLimit > BigInt(0) &&
+      loanAmountPaise > maxLimit
+    ) {
+      return NextResponse.json(
+        {
+          error: `Exceeds max loan limit of ₹${Number(maxLimit) / 100}`,
+        },
+        { status: 400 }
+      )
+    }
+
+    const loanStatus = performer.role === "SUPERADMIN" ? "ACTIVE" : "PENDING"
+    const finalInterestRate = interest_rate ?? 2.0
+    const finalTermMonths = term_months ?? 12
+
+    const loan = await prisma.$transaction(async (tx) => {
+      const createdLoan = await tx.loan.create({
+        data: {
+          organizationId: performer.organizationId,
+          memberId: member_id,
+          guarantorId: guarantor_id || null,
+          loanAmount: loanAmountPaise,
+          outstandingAmount: loanAmountPaise,
+          interestRate: finalInterestRate,
+          disbursedDate: meeting.meetingDate,
+          purpose: purpose || "",
+          termMonths: finalTermMonths,
+          status: loanStatus,
+          requestedBy: performer.id,
+          approvedBy: loanStatus === "ACTIVE" ? performer.id : null,
+          approvedAt: loanStatus === "ACTIVE" ? new Date() : null,
+        },
+      })
+
+      if (loanStatus === "ACTIVE") {
+        const emis = calcEmiSchedule(
+          Number(loanAmountPaise),
+          finalInterestRate,
+          finalTermMonths,
+          meeting.meetingDate
+        )
+
+        await tx.loanEmi.createMany({
+          data: emis.map((e) => ({
+            loanId: createdLoan.id,
+            monthYear: e.month_year,
+            dueDate: new Date(e.due_date),
+            principalDue: BigInt(e.principal_due),
+            interestDue: BigInt(e.interest_due),
+            principalPaid: BigInt(e.principal_paid),
+            interestPaid: BigInt(e.interest_paid),
+            fineAmount: BigInt(e.fine_amount),
+            status: e.status,
+          })),
+        })
+      }
+
+      await logActivity(tx, performer.id, performer.organizationId, "LOAN_ISSUED", "loan", createdLoan.id, {
+        member_name: targetMember.name,
+        amount: Number(loanAmountPaise),
+        status: loanStatus,
+      })
+
+      if (guarantor_id) {
+        await logActivity(tx, performer.id, performer.organizationId, "GUARANTOR_ASSIGNED", "loan", createdLoan.id, {
+          member_id,
+          guarantor_id,
+          loan_id: createdLoan.id,
+        })
+      }
+
+      return createdLoan
+    })
+
+    return NextResponse.json(loan)
   } catch (err) {
-    console.error('[LOANS_ISSUED]', err)
-    return NextResponse.json(
-      { error: 'Internal server error' }, { status: 500 }
-    )
+    console.error("[LOANS_ISSUED]", err)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

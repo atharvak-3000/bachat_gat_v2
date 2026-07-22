@@ -1,6 +1,5 @@
 "use client"
 
-import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -39,26 +38,30 @@ export default function SignUpPage() {
     }
 
     setLoading(true)
-    const supabase = createClient()
-    
+
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { 
-            name: fullName, 
-            phone 
-          }
-        }
+      const res = await fetch("/api/organizations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `${fullName}'s Bachat Gat`,
+          village: "Pune",
+          district: "Pune",
+          monthly_saving_amount: 100,
+          admin_name: fullName,
+          phone,
+          email,
+          password,
+        }),
       })
 
-      if (error) {
-        toast.error(error.message)
-      } else {
-        toast.success("नोंदणी यशस्वी झाली!")
-        router.push("/onboarding")
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || "काहीतरी चूक झाली")
       }
+
+      toast.success("नोंदणी यशस्वी झाली!")
+      router.push("/onboarding")
     } catch (err: any) {
       toast.error(err.message || "काहीतरी चूक झाली")
     } finally {

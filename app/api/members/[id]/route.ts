@@ -1,27 +1,37 @@
-import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { requireSuperAdmin, requireAdminOrAbove, logActivity } from "@/lib/auth"
+import prisma from "@/lib/prisma"
+import { requireAdminOrAbove, logActivity, toSafeMember } from "@/lib/auth"
 
 export async function GET(_req: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params
     const performer = await requireAdminOrAbove()
-    const supabase = await createClient()
 
-    const [{ data: member }, { data: contributions }, { data: loans }] = await Promise.all([
-      supabase.from('members').select('*').eq('organization_id', performer.organization_id).eq('id', id).maybeSingle(),
-      supabase.from('meeting_contributions').select('*').eq('member_id', id),
-      supabase.from('loans').select('*').eq('organization_id', performer.organization_id).eq('member_id', id),
+    const member = await prisma.member.findFirst({
+      where: {
+        id,
+        organizationId: performer.organizationId,
+      },
+    })
+
+    if (!member) return NextResponse.json({ error: "Member not found" }, { status: 404 })
+
+    const [contributions, loans] = await Promise.all([
+      prisma.meetingContribution.findMany({ where: { memberId: id } }),
+      prisma.loan.findMany({ where: { organizationId: performer.organizationId, memberId: id } }),
     ])
 
-    if (!member) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
-    return NextResponse.json({ member, contributions: contributions ?? [], loans: loans ?? [] })
-  } catch (error) {
-    if (error instanceof Error && (error.message === 'UNAUTHENTICATED' || error.message === 'UNAUTHORIZED')) {
-      return NextResponse.json({ error: error.message }, { status: error.message === 'UNAUTHENTICATED' ? 401 : 403 })
+    return NextResponse.json({
+      member: toSafeMember(member),
+      contributions: contributions ?? [],
+      loans: loans ?? [],
+    })
+  } catch (error: any) {
+    if (error?.message === "UNAUTHENTICATED" || error?.message === "UNAUTHORIZED" || error?.message === "FORBIDDEN") {
+      return NextResponse.json({ error: error.message }, { status: error.message === "UNAUTHENTICATED" ? 401 : 403 })
     }
-    console.error('[MEMBER_GET]', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error("[MEMBER_GET]", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
@@ -29,37 +39,37 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
   try {
     const { id } = await context.params
     const performer = await requireAdminOrAbove()
-    const supabase = await createClient()
     const body = await req.json()
 
-    const allowedBase = ['name', 'phone', 'address', 'name_marathi']
-    const allowedSuper = ['joining_date']
-    const allowed = performer.role === 'SUPERADMIN' ? [...allowedBase, ...allowedSuper] : allowedBase
+    const existingMember = await prisma.member.findFirst({
+      where: { id, organizationId: performer.organizationId },
+    })
 
-    const updates: Record<string, unknown> = {}
-    for (const key of allowed) {
-      if (key in body) updates[key] = body[key]
+    if (!existingMember) return NextResponse.json({ error: "Member not found" }, { status: 404 })
+
+    const data: any = {}
+    if (body.name !== undefined) data.name = body.name
+    if (body.phone !== undefined) data.phone = body.phone
+    if (body.address !== undefined) data.address = body.address
+    if (body.name_marathi !== undefined) data.nameMarathi = body.name_marathi
+
+    if (performer.role === "SUPERADMIN" && body.joining_date !== undefined) {
+      data.joiningDate = new Date(body.joining_date)
     }
 
-    const { data: updated, error } = await supabase
-      .from('members')
-      .update(updates)
-      .eq('id', id)
-      .eq('organization_id', performer.organization_id)
-      .select('*')
-      .maybeSingle()
+    const updated = await prisma.member.update({
+      where: { id },
+      data,
+    })
 
-    if (error) throw error
-    if (!updated) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
+    await logActivity(prisma, performer.id, performer.organizationId, "MEMBER_UPDATED", "member", id, data)
 
-    await logActivity(supabase, performer.id, performer.organization_id, 'MEMBER_UPDATED', 'member', id, updates)
-
-    return NextResponse.json(updated)
-  } catch (error) {
-    if (error instanceof Error && (error.message === 'UNAUTHENTICATED' || error.message === 'UNAUTHORIZED')) {
-      return NextResponse.json({ error: error.message }, { status: error.message === 'UNAUTHENTICATED' ? 401 : 403 })
+    return NextResponse.json(toSafeMember(updated))
+  } catch (error: any) {
+    if (error?.message === "UNAUTHENTICATED" || error?.message === "UNAUTHORIZED" || error?.message === "FORBIDDEN") {
+      return NextResponse.json({ error: error.message }, { status: error.message === "UNAUTHENTICATED" ? 401 : 403 })
     }
-    console.error('[MEMBER_PATCH]', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error("[MEMBER_PATCH]", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

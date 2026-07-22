@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import { requireAdminOrAbove } from "@/lib/auth"
-import { createClient } from "@/lib/supabase/server"
+import prisma from "@/lib/prisma"
 import { calcMeetingTotals } from "@/lib/calculations"
 import MeetingsClient from "./MeetingsClient"
 
@@ -12,61 +12,50 @@ export default async function MeetingsPage() {
     redirect("/sign-in")
   }
 
-  const supabase = await createClient()
+  const [meetings, contributions, expenses, income, loans] = await Promise.all([
+    prisma.meeting.findMany({
+      where: { organizationId: performer.organization_id },
+      orderBy: { monthYear: "desc" },
+    }),
+    prisma.meetingContribution.findMany(),
+    prisma.meetingExpense.findMany(),
+    prisma.meetingIncome.findMany(),
+    prisma.loan.findMany({
+      where: { organizationId: performer.organization_id },
+    }),
+  ])
 
-  // Fetch meetings
-  const { data: meetings, error: meetingsError } = await supabase
-    .from("meetings")
-    .select("*")
-    .eq("organization_id", performer.organization_id)
-    .order("month_year", { ascending: false })
+  const meetingsWithTotals = meetings.map((m) => {
+    const meetingDateStr = m.meetingDate.toISOString().split("T")[0]
+    const mContribs = contributions
+      .filter((c) => c.meetingId === m.id)
+      .map((c) => ({
+        savings_amount: Number(c.savingsAmount),
+        loan_repayment: Number(c.loanRepayment),
+        interest_paid: Number(c.interestPaid),
+        penalty_paid: Number(c.penaltyPaid),
+        other_amount: Number(c.otherAmount),
+        is_present: Boolean(c.isPresent),
+      }))
 
-  if (meetingsError) {
-    console.error("Failed to fetch meetings:", meetingsError)
-  }
+    const mExps = expenses
+      .filter((e) => e.meetingId === m.id)
+      .reduce((sum, e) => sum + Number(e.amount), 0)
 
-  const { data: contributions } = await supabase
-    .from("meeting_contributions")
-    .select("meeting_id, savings_amount, penalty_paid, loan_repayment, interest_paid, other_amount, is_present")
+    const mIncs = income
+      .filter((i) => i.meetingId === m.id)
+      .reduce((sum, i) => sum + Number(i.amount), 0)
 
-  const { data: expenses } = await supabase
-    .from("meeting_expenses")
-    .select("meeting_id, amount")
-
-  const { data: income } = await supabase
-    .from("meeting_income")
-    .select("meeting_id, amount")
-
-  const { data: loans } = await supabase
-    .from("loans")
-    .select("loan_amount, status, disbursed_date")
-    .eq("organization_id", performer.organization_id)
-
-  const list = meetings || []
-  const contribs = contributions || []
-  const exps = expenses || []
-  const incs = income || []
-  const activeLoans = loans || []
-
-  const meetingsWithTotals = list.map((m) => {
-    const mContribs = contribs.filter((c) => c.meeting_id === m.id).map((c) => ({
-      savings_amount: c.savings_amount || 0,
-      loan_repayment: c.loan_repayment || 0,
-      interest_paid: c.interest_paid || 0,
-      penalty_paid: c.penalty_paid || 0,
-      other_amount: c.other_amount || 0,
-      is_present: !!c.is_present,
-    }))
-    const mExps = exps.filter((e) => e.meeting_id === m.id).reduce((sum, e) => sum + e.amount, 0)
-    const mIncs = incs.filter((i) => i.meeting_id === m.id).reduce((sum, i) => sum + i.amount, 0)
-    
-    // Issued loans: disbursed on meeting date and active or closed
-    const mLoans = activeLoans
-      .filter((l) => l.disbursed_date === m.meeting_date && ['ACTIVE', 'CLOSED'].includes(l.status))
-      .reduce((sum, l) => sum + l.loan_amount, 0)
+    const mLoans = loans
+      .filter(
+        (l) =>
+          l.disbursedDate.toISOString().split("T")[0] === meetingDateStr &&
+          ["ACTIVE", "CLOSED"].includes(l.status)
+      )
+      .reduce((sum, l) => sum + Number(l.loanAmount), 0)
 
     const totals = calcMeetingTotals({
-      opening_balance: m.opening_balance || 0,
+      opening_balance: Number(m.openingBalance),
       contributions: mContribs,
       loans_issued_total: mLoans,
       other_expenses_total: mExps,
@@ -75,9 +64,14 @@ export default async function MeetingsPage() {
 
     return {
       ...m,
+      organization_id: m.organizationId,
+      month_year: m.monthYear,
+      meeting_date: meetingDateStr,
+      opening_balance: Number(m.openingBalance),
+      created_at: m.createdAt.toISOString(),
       totals,
     }
   })
 
-  return <MeetingsClient initialMeetings={meetingsWithTotals} />
+  return <MeetingsClient initialMeetings={meetingsWithTotals as any} />
 }

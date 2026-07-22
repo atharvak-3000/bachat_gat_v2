@@ -1,127 +1,135 @@
-import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { requireSuperAdmin, requireAdminOrAbove, logActivity } from "@/lib/auth"
+import bcrypt from "bcryptjs"
+import { z } from "zod"
+import prisma from "@/lib/prisma"
+import { requireAdminOrAbove, logActivity, toSafeMember } from "@/lib/auth"
+
+const createMemberSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  name_marathi: z.string().optional(),
+  phone: z.string().regex(/^\d{10}$/, "Invalid 10-digit phone number"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  address: z.string().optional(),
+  joining_date: z.string().optional(),
+})
 
 export async function GET(req: Request) {
   try {
     const performer = await requireAdminOrAbove()
-    const supabase = await createClient()
     const url = new URL(req.url)
     const status = url.searchParams.get("status")
-    const { data, error } = await supabase
-      .from("members")
-      .select("*")
-      .eq("organization_id", performer.organization_id)
-      .order("member_number", { ascending: true })
-    if (error) throw error
-    const filtered = status ? (data ?? []).filter((m) => m.status === status) : data
-    return NextResponse.json(filtered)
-  } catch (error) {
-    if (error instanceof Error && (error.message === 'UNAUTHENTICATED' || error.message === 'UNAUTHORIZED')) {
-      return NextResponse.json({ error: error.message }, { status: error.message === 'UNAUTHENTICATED' ? 401 : 403 })
+
+    const where: any = { organizationId: performer.organizationId }
+    if (status) {
+      where.status = status
     }
-    console.error(error)
-    return NextResponse.json({ error: 'Failed to fetch members' }, { status: 500 })
+
+    const members = await prisma.member.findMany({
+      where,
+      orderBy: { memberNumber: "asc" },
+    })
+
+    const safeMembers = members.map((m) => toSafeMember(m))
+    return NextResponse.json(safeMembers)
+  } catch (error: any) {
+    if (error?.message === "UNAUTHENTICATED" || error?.message === "UNAUTHORIZED" || error?.message === "FORBIDDEN") {
+      return NextResponse.json({ error: error.message }, { status: error.message === "UNAUTHENTICATED" ? 401 : 403 })
+    }
+    console.error("GET /api/members error:", error)
+    return NextResponse.json({ error: "Failed to fetch members" }, { status: 500 })
   }
 }
 
 export async function POST(req: Request) {
   try {
     const performer = await requireAdminOrAbove()
-    const supabase = await createClient()
     const body = await req.json()
-    const { name, name_marathi, phone, password, address, joining_date } = body
+    const parseResult = createMemberSchema.safeParse(body)
 
-    if (!name || !phone || !password) return NextResponse.json({ error: 'Name, phone, and password required' }, { status: 400 })
-    if (!/^\d{10}$/.test(phone)) return NextResponse.json({ error: 'Invalid phone number' }, { status: 400 })
-    if (password.length < 6) return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 })
+    if (!parseResult.success) {
+      return NextResponse.json({ error: parseResult.error.errors[0].message }, { status: 400 })
+    }
+
+    const { name, name_marathi, phone, password, address, joining_date } = parseResult.data
 
     // Check organization active member limits if subscription is ACTIVE or TRIAL
-    const { data: org, error: orgError } = await supabase
-      .from("organizations")
-      .select("max_members, subscription_plan, subscription_status")
-      .eq("id", performer.organization_id)
-      .single()
+    const org = await prisma.organization.findUnique({
+      where: { id: performer.organizationId },
+    })
 
-    if (orgError || !org) {
+    if (!org) {
       return NextResponse.json({ error: "Organization not found" }, { status: 404 })
     }
 
-    if (org.subscription_status === "ACTIVE" || org.subscription_status === "TRIAL") {
-      const { count, error: countError } = await supabase
-        .from("members")
-        .select("id", { count: "exact", head: true })
-        .eq("organization_id", performer.organization_id)
-        .eq("status", "ACTIVE")
+    if (org.subscriptionStatus === "ACTIVE" || org.subscriptionStatus === "TRIAL") {
+      const activeMembers = await prisma.member.count({
+        where: {
+          organizationId: performer.organizationId,
+          status: "ACTIVE",
+        },
+      })
 
-      if (countError) {
-        return NextResponse.json({ error: "Failed to count active members" }, { status: 500 })
-      }
-
-      const activeMembers = count || 0
-      const maxMembers = org.max_members || 10
+      const maxMembers = org.maxMembers || 10
       if (activeMembers >= maxMembers) {
-        return NextResponse.json({
-          error: "MEMBER_LIMIT_REACHED",
-          message: "You have reached your plan limit. Please upgrade your subscription.",
-          currentPlan: org.subscription_plan || "BASIC",
-          maxMembers: maxMembers
-        }, { status: 403 })
+        return NextResponse.json(
+          {
+            error: "MEMBER_LIMIT_REACHED",
+            message: "You have reached your plan limit. Please upgrade your subscription.",
+            currentPlan: org.subscriptionPlan || "BASIC",
+            maxMembers: maxMembers,
+          },
+          { status: 403 }
+        )
       }
     }
 
-    // Validation: Check if a member with this phone number already exists in this Gat
-    const { data: existingPhone } = await supabase
-      .from("members")
-      .select("id")
-      .eq("organization_id", performer.organization_id)
-      .eq("phone", phone)
-      .maybeSingle()
+    // Check if phone already exists in this Gat
+    const existingPhone = await prisma.member.findFirst({
+      where: {
+        organizationId: performer.organizationId,
+        phone: phone,
+      },
+    })
 
     if (existingPhone) {
-      return NextResponse.json({ error: 'A member with this phone number already exists in your Gat' }, { status: 400 })
+      return NextResponse.json({ error: "A member with this phone number already exists in your Gat" }, { status: 400 })
     }
 
-    // Use admin client to create auth user
-    const { createAdminClient } = await import('@/lib/supabase/admin')
-    const adminClient = createAdminClient()
-    const fakeEmail = `91${phone}@bachatbook.app`
+    const passwordHash = await bcrypt.hash(password, 10)
 
-    const { data: existingUsers } = await adminClient.auth.admin.listUsers()
-    const existingAuthUser = existingUsers?.users?.find((u: any) => u.email === fakeEmail)
+    const lastMember = await prisma.member.findFirst({
+      where: { organizationId: performer.organizationId },
+      orderBy: { memberNumber: "desc" },
+    })
+    const nextNumber = (lastMember?.memberNumber ?? 0) + 1
 
-    let authUserId: string
-    if (existingAuthUser) {
-      await adminClient.auth.admin.updateUserById(existingAuthUser.id, { password })
-      authUserId = existingAuthUser.id
-    } else {
-      const { data: newUser, error: authError } = await adminClient.auth.admin.createUser({
-        email: fakeEmail,
-        password,
-        email_confirm: true,
-        user_metadata: { name, phone }
-      })
-      if (authError) throw new Error('Failed to create login account: ' + authError.message)
-      authUserId = newUser.user!.id
+    const newMember = await prisma.member.create({
+      data: {
+        organizationId: performer.organizationId,
+        name,
+        nameMarathi: name_marathi || "",
+        phone,
+        passwordHash,
+        address: address || null,
+        joiningDate: joining_date ? new Date(joining_date) : new Date(),
+        memberNumber: nextNumber,
+        role: "MEMBER",
+        status: "ACTIVE",
+        isActive: true,
+      },
+    })
+
+    await logActivity(prisma, performer.id, performer.organizationId, "MEMBER_ADDED", "member", newMember.id, {
+      name,
+      member_number: nextNumber,
+    })
+
+    return NextResponse.json(toSafeMember(newMember))
+  } catch (error: any) {
+    if (error?.message === "UNAUTHENTICATED" || error?.message === "UNAUTHORIZED" || error?.message === "FORBIDDEN") {
+      return NextResponse.json({ error: error.message }, { status: error.message === "UNAUTHENTICATED" ? 401 : 403 })
     }
-
-    const { data: lastMember } = await supabase
-      .from("members").select("member_number").eq("organization_id", performer.organization_id).order("member_number", { ascending: false }).limit(1).maybeSingle()
-    const next_number = (lastMember?.member_number ?? 0) + 1
-
-    const { data: member, error } = await supabase
-      .from("members")
-      .insert({ organization_id: performer.organization_id, user_id: authUserId, name, name_marathi: name_marathi || '', phone, address: address || '', joining_date: joining_date || new Date().toISOString().split('T')[0], member_number: next_number, role: 'MEMBER', status: 'ACTIVE', is_active: true })
-      .select().single()
-    if (error) throw error
-
-    await logActivity(supabase, performer.id, performer.organization_id, 'MEMBER_ADDED', 'member', member.id, { name, member_number: next_number })
-    return NextResponse.json(member)
-  } catch (error) {
-    if (error instanceof Error && (error.message === 'UNAUTHENTICATED' || error.message === 'UNAUTHORIZED')) {
-      return NextResponse.json({ error: error.message }, { status: error.message === 'UNAUTHENTICATED' ? 401 : 403 })
-    }
-    console.error(error)
-    return NextResponse.json({ error: 'Failed to add member' }, { status: 500 })
+    console.error("POST /api/members error:", error)
+    return NextResponse.json({ error: "Failed to add member" }, { status: 500 })
   }
 }

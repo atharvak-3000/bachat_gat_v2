@@ -1,7 +1,10 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { jwtVerify } from 'jose'
 
-// Routes that never need auth checks
+const JWT_SECRET_BYTES = new TextEncoder().encode(
+  process.env.JWT_SECRET || "fallback-super-secret-jwt-key-bachatgat-2026"
+)
+
 const PUBLIC_PREFIXES = [
   '/sign-in',
   '/sign-up',
@@ -11,9 +14,9 @@ const PUBLIC_PREFIXES = [
   '/join',
   '/pending',
   '/rejected',
-  '/api/organizations/by-code',
-  '/api/organizations/join',
+  '/api/organizations',
   '/api/auth',
+  '/api/files',
   '/_next',
   '/favicon',
 ]
@@ -21,7 +24,6 @@ const PUBLIC_PREFIXES = [
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Always allow public routes — no Supabase call needed
   if (pathname === '/' || PUBLIC_PREFIXES.some(p => pathname.startsWith(p))) {
     const res = NextResponse.next()
     res.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
@@ -42,45 +44,8 @@ export async function middleware(request: NextRequest) {
   response.headers.set('Pragma', 'no-cache')
   response.headers.set('Expires', '0')
 
-  // Read env — use whichever key exists
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-    ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-  const supabase = createServerClient(supabaseUrl, supabaseKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll()
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) =>
-          request.cookies.set(name, value)
-        )
-        response = NextResponse.next({
-          request: {
-            headers: requestHeaders,
-          },
-        })
-        cookiesToSet.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, options)
-        )
-      },
-    },
-  })
-
-  // MUST call getUser — refreshes session token
-  let user = null
-  let userError = null
-  try {
-    const { data, error } = await supabase.auth.getUser()
-    user = data?.user || null
-    userError = error
-  } catch (err: any) {
-    userError = err
-  }
-
-  // Not authenticated → sign-in (or 401 for API routes)
-  if (userError || !user) {
+  const token = request.cookies.get('bb_token')?.value
+  if (!token) {
     if (pathname === '/sign-in') return response
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -88,91 +53,53 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/sign-in', request.url))
   }
 
-  // Fetch member record
-  const { data: member, error: memberError } = await supabase
-    .from('members')
-    .select('id, role, status, organization_id')
-    .eq('user_id', user.id)
-    .maybeSingle()
-
-
-  // ADD THIS RIGHT HERE:
-  console.log('[PROXY]', {
-    path: pathname,
-    role: member?.role,
-    status: member?.status,
-    hasUser: !!user
-  })
-
-  // DB error → pass through, don't loop
-  if (memberError) {
-    console.error('[proxy] DB error:', memberError.message)
-    return response
+  let payload: any = null
+  try {
+    const verified = await jwtVerify(token, JWT_SECRET_BYTES)
+    payload = verified.payload
+  } catch {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    return NextResponse.redirect(new URL('/sign-in', request.url))
   }
 
-  // Authenticated but no member record → onboarding (new superadmin)
-  if (!member) {
-    if (pathname === '/onboarding' || pathname.startsWith('/api/')) return response
-    return NextResponse.redirect(new URL('/onboarding', request.url))
-  }
+  const role = payload?.role || 'MEMBER'
+  const status = payload?.status || 'ACTIVE'
 
-  // Member exists — never send to onboarding
-  if (pathname === '/onboarding') {
-    return NextResponse.redirect(
-      new URL(member.role === 'MEMBER' ? '/member' : '/dashboard', request.url)
-    )
-  }
-
-  // Status-based gates
-  if (member.status === 'PENDING') {
+  if (status === 'PENDING') {
     if (pathname === '/pending' || pathname.startsWith('/api/')) return response
     return NextResponse.redirect(new URL('/pending', request.url))
   }
-  if (member.status === 'REJECTED') {
+  if (status === 'REJECTED') {
     if (pathname === '/rejected' || pathname.startsWith('/api/')) return response
     return NextResponse.redirect(new URL('/rejected', request.url))
   }
 
-  // Root → role home
-  if (pathname === '/') {
-    const home = member.role === 'MEMBER' ? '/member' : '/dashboard'
-    return NextResponse.redirect(new URL(home, request.url))
-  }
+  const isAdminRole = ['SUPERADMIN', 'ADMIN'].includes(role)
 
-  const isAdminRole = ['SUPERADMIN', 'ADMIN'].includes(member.role)
-
-  // SUPERADMIN and ADMIN cannot go to /member portal
-  if (isAdminRole && (
-    pathname === '/member' || pathname.startsWith('/member/')
-  )) {
+  if (isAdminRole && (pathname === '/member' || pathname.startsWith('/member/'))) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  // MEMBER cannot go to admin paths, EXCEPT for /loans and /reports
-  const ADMIN_PATHS = [
-    '/dashboard', '/meetings', '/members',
-    '/payments', '/expenses'
-  ]
-  if (member.role === 'MEMBER' &&
-    ADMIN_PATHS.some(p => pathname.startsWith(p))) {
+  const ADMIN_PATHS = ['/dashboard', '/meetings', '/members', '/payments', '/expenses']
+  if (role === 'MEMBER' && ADMIN_PATHS.some(p => pathname.startsWith(p))) {
     return NextResponse.redirect(new URL('/member', request.url))
   }
 
-  // ADMIN cannot access settings
-  if (member.role === 'ADMIN' && pathname.startsWith('/settings')) {
+  if (role === 'ADMIN' && pathname.startsWith('/settings')) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
   return response
 }
 
-// Custom platform proxy compatibility wrapper
 export async function proxy(request: NextRequest) {
   return middleware(request)
 }
 
+export default proxy
+
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',],
+  matcher: ['/((?!_next/static|_next/image|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 }
-
-

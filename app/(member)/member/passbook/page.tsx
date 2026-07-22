@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import { requireAuth } from "@/lib/auth"
-import { createClient } from "@/lib/supabase/server"
+import prisma from "@/lib/prisma"
 import { formatRupees, formatMonthYear } from "@/lib/calculations"
 import type { MeetingContribution, Meeting, Loan } from "@/types"
 import PrintButton from "./PrintButton"
@@ -19,58 +19,76 @@ export default async function MemberPassbookPage() {
     redirect("/sign-in")
   }
 
-  const supabase = await createClient()
+  const [contribs, loans] = await Promise.all([
+    prisma.meetingContribution.findMany({
+      where: { memberId: performer.id },
+      include: { meeting: true },
+    }),
+    prisma.loan.findMany({
+      where: {
+        memberId: performer.id,
+        status: { not: "REJECTED" },
+      },
+    }),
+  ])
 
-  // Fetch all contributions for this member with meetings
-  const { data: contribs, error: contribsError } = await supabase
-    .from("meeting_contributions")
-    .select("*, meeting:meetings(*)")
-    .eq("member_id", performer.id)
+  const memberContribs = contribs.map((c) => ({
+    ...c,
+    meeting_id: c.meetingId,
+    member_id: c.memberId,
+    savings_amount: Number(c.savingsAmount),
+    loan_repayment: Number(c.loanRepayment),
+    interest_paid: Number(c.interestPaid),
+    penalty_paid: Number(c.penaltyPaid),
+    other_amount: Number(c.otherAmount),
+    is_present: c.isPresent,
+    meeting: {
+      ...c.meeting,
+      organization_id: c.meeting.organizationId,
+      month_year: c.meeting.monthYear,
+      meeting_date: c.meeting.meetingDate.toISOString().split("T")[0],
+      opening_balance: Number(c.meeting.openingBalance),
+      created_at: c.meeting.createdAt.toISOString(),
+    },
+  })) as unknown as (MeetingContribution & { meeting: Meeting })[]
 
-  if (contribsError) console.error("Error fetching contributions for passbook:", contribsError)
+  const myLoans = loans.map((l) => ({
+    ...l,
+    organization_id: l.organizationId,
+    member_id: l.memberId,
+    guarantor_id: l.guarantorId,
+    loan_amount: Number(l.loanAmount),
+    outstanding_amount: Number(l.outstandingAmount),
+    interest_rate: Number(l.interestRate),
+    disbursed_date: l.disbursedDate.toISOString().split("T")[0],
+    term_months: l.termMonths,
+    created_at: l.createdAt.toISOString(),
+  })) as unknown as Loan[]
 
-  // Fetch all loans for this member (excluding rejected ones)
-  const { data: loans, error: loansError } = await supabase
-    .from("loans")
-    .select("*")
-    .eq("member_id", performer.id)
-    .neq("status", "REJECTED")
-
-  if (loansError) console.error("Error fetching loans for passbook:", loansError)
-
-  const memberContribs = (contribs || []) as (MeetingContribution & { meeting: Meeting })[]
-  const myLoans = (loans || []) as Loan[]
-
-  // Filter finalized contributions and sort chronologically (oldest first)
   const finalizedContribs = memberContribs
-    .filter((c) => c.meeting && c.meeting.status === 'FINALIZED')
+    .filter((c) => c.meeting && c.meeting.status === "FINALIZED")
     .sort((a, b) => new Date(a.meeting.meeting_date).getTime() - new Date(b.meeting.meeting_date).getTime())
 
-  // Compute ledger entries
   let runningSavings = 0
   let runningOutstandingLoan = 0
 
   const ledgerEntries = finalizedContribs.map((c) => {
-    // 1. Accumulate savings
     runningSavings += c.savings_amount || 0
 
-    // 2. Align any loan disbursed in this meeting's month_year
     const meetingMonth = c.meeting.month_year
     const loanDisbursed = myLoans.find((l) => {
       if (!l.disbursed_date) return false
-      const loanMonth = l.disbursed_date.substring(0, 7) // YYYY-MM
+      const loanMonth = l.disbursed_date.substring(0, 7)
       return loanMonth === meetingMonth
     })
 
     const loanAmountDisbursed = loanDisbursed ? loanDisbursed.loan_amount : 0
 
-    // 3. Accumulate/Reduce outstanding loan balance
     if (loanAmountDisbursed > 0) {
       runningOutstandingLoan += loanAmountDisbursed
     }
-    runningOutstandingLoan -= (c.loan_repayment || 0)
+    runningOutstandingLoan -= c.loan_repayment || 0
 
-    // Ensure we don't display negative outstanding loan balance due to floating point or minor rounding
     if (runningOutstandingLoan < 0) {
       runningOutstandingLoan = 0
     }
@@ -92,7 +110,6 @@ export default async function MemberPassbookPage() {
 
   return (
     <div className="space-y-6 animate-fadeIn">
-      {/* CSS print overrides */}
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {
           body, html, main, .print-area, .print-area *, .print-area div, .print-area p, .print-area span, .print-area h2, .print-area strong, .print-area table, .print-area th, .print-area td {
@@ -133,7 +150,6 @@ export default async function MemberPassbookPage() {
         }
       ` }} />
 
-      {/* Header section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100 dark:border-gray-850 no-print">
         <div>
           <h1 className="text-[#1B2B6B] dark:text-white font-bold text-2xl">
@@ -146,9 +162,7 @@ export default async function MemberPassbookPage() {
         <PrintButton />
       </div>
 
-      {/* Passbook Card */}
       <div className="bg-white dark:bg-[#1A1D27] border border-gray-250 dark:border-gray-800 rounded-2xl p-6 md:p-8 shadow-sm space-y-8 print-area">
-        {/* Passbook Cover Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 pb-6 border-b-2 border-dashed border-[#E85D26]/30 dark:border-orange-500/20">
           <div className="space-y-1">
             <h2 className="text-[#1B2B6B] dark:text-white font-black text-xl tracking-wide">BACHATGATONLINE PASSBOOK</h2>
@@ -160,7 +174,6 @@ export default async function MemberPassbookPage() {
           </div>
         </div>
 
-        {/* Member Details block */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-gray-50/50 dark:bg-gray-950/50 p-5 rounded-xl border border-gray-100 dark:border-gray-850">
           <div>
             <span className="text-gray-400 dark:text-gray-500 text-xs uppercase tracking-wide block mb-0.5">{t("memberName")}</span>
@@ -176,7 +189,7 @@ export default async function MemberPassbookPage() {
           </div>
           <div>
             <span className="text-gray-400 dark:text-gray-500 text-xs uppercase tracking-wide block mb-0.5">{t("kycStatus")}</span>
-            {performer.kyc_status === 'VERIFIED' ? (
+            {performer.kyc_status === "VERIFIED" ? (
               <span className="text-green-600 dark:text-green-400 font-semibold block text-sm">✓ {t("verified")}</span>
             ) : (
               <span className="text-[#E85D26] dark:text-orange-400 font-semibold block text-sm">{t("pending")}</span>
@@ -184,25 +197,21 @@ export default async function MemberPassbookPage() {
           </div>
         </div>
 
-        {/* MOBILE SUMMARY - show above table on mobile */}
         <div className="md:hidden grid grid-cols-2 gap-3 mb-4 no-print">
           <div className="bg-green-50/50 dark:bg-green-950/20 rounded-xl p-3 border border-green-100 dark:border-green-900/30">
             <p className="text-xs text-green-600 dark:text-green-400 font-medium">{t("mySavings")}</p>
             <p className="text-lg font-bold text-green-700 dark:text-green-300">
-              {formatRupees(ledgerEntries[ledgerEntries.length-1]
-                ?.running_savings || 0)}
+              {formatRupees(ledgerEntries[ledgerEntries.length - 1]?.running_savings || 0)}
             </p>
           </div>
           <div className="bg-orange-50/50 dark:bg-orange-950/20 rounded-xl p-3 border border-orange-100 dark:border-orange-900/30">
             <p className="text-xs text-[#E85D26] dark:text-orange-400 font-medium">{t("activeLoanDue")}</p>
             <p className="text-lg font-bold text-[#E85D26] dark:text-orange-400">
-              {formatRupees(ledgerEntries[ledgerEntries.length-1]
-                ?.outstanding_loan || 0)}
+              {formatRupees(ledgerEntries[ledgerEntries.length - 1]?.outstanding_loan || 0)}
             </p>
           </div>
         </div>
 
-        {/* Ledger Table */}
         <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0 rounded-xl border border-gray-100 dark:border-gray-800">
           <table className="w-full text-left text-xs border-collapse min-w-[900px]">
             <thead>
@@ -226,7 +235,7 @@ export default async function MemberPassbookPage() {
                     {formatMonthYear(entry.month_year)}
                   </td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                    {new Date(entry.meeting_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    {new Date(entry.meeting_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
                   </td>
                   <td className="px-4 py-3 text-center text-xs">
                     {entry.is_present ? (
@@ -270,9 +279,8 @@ export default async function MemberPassbookPage() {
           </table>
         </div>
 
-        {/* Audit footer */}
         <div className="flex justify-between items-center pt-8 border-t border-gray-100 dark:border-gray-800 text-[10px] text-gray-400 dark:text-gray-500 font-semibold uppercase tracking-wider">
-          <span>Ledger Auto-Generated on {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+          <span>Ledger Auto-Generated on {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
           <span>BachatGatOnline System Verified Passbook</span>
         </div>
       </div>

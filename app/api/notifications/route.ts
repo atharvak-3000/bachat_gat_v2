@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
+import prisma from "@/lib/prisma"
 import { getCurrentMember } from "@/lib/auth"
-import { createClient } from "@/lib/supabase/server"
 
 export async function GET(request: Request) {
   try {
@@ -11,27 +11,21 @@ export async function GET(request: Request) {
     const isCount = searchParams.get("count") === "true"
     const limit = parseInt(searchParams.get("limit") || "10", 10)
 
-    const supabase = await createClient()
-
     if (isCount) {
-      const { count, error } = await supabase
-        .from("notifications")
-        .select("*", { count: "exact", head: true })
-        .eq("member_id", member.id)
-        .eq("is_read", false)
-
-      if (error) throw error
-      return NextResponse.json({ unread_count: count || 0 })
+      const count = await prisma.notification.count({
+        where: {
+          memberId: member.id,
+          isRead: false,
+        },
+      })
+      return NextResponse.json({ unread_count: count })
     }
 
-    const { data: notifications, error } = await supabase
-      .from("notifications")
-      .select("*")
-      .eq("member_id", member.id)
-      .order("created_at", { ascending: false })
-      .limit(limit)
-
-    if (error) throw error
+    const notifications = await prisma.notification.findMany({
+      where: { memberId: member.id },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    })
 
     return NextResponse.json({ notifications })
   } catch (error: any) {

@@ -1,175 +1,179 @@
-import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { requireAuth, logActivity } from "@/lib/auth"
+import prisma from "@/lib/prisma"
+import { requireAuth, logActivity, toSafeMember } from "@/lib/auth"
 import { calcEmiSchedule } from "@/lib/calculations"
+import { z } from "zod"
+
+const loanRequestSchema = z.object({
+  member_id: z.string().optional(),
+  amount: z.number().positive("Amount must be greater than zero"),
+  interest_rate: z.number().optional(),
+  purpose: z.string().optional(),
+  term_months: z.number().positive("Term months is required"),
+})
 
 export async function GET(req: Request) {
   try {
     const performer = await requireAuth()
-    const supabase = await createClient()
 
-    const { data: loans, error } = await supabase
-      .from("loans")
-      .select("*, member:members!loans_member_id_fkey(*), guarantor:members!guarantor_id(id, name)")
-      .eq("organization_id", performer.organization_id)
-      .order("created_at", { ascending: false })
+    const loans = await prisma.loan.findMany({
+      where: { organizationId: performer.organizationId },
+      include: {
+        member: true,
+        guarantor: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    })
 
-    if (error) throw error
-    return NextResponse.json(loans || [])
-  } catch (error) {
-    if (error instanceof Error && (error.message === 'UNAUTHENTICATED' || error.message === 'UNAUTHORIZED')) {
-      return NextResponse.json({ error: error.message }, { status: error.message === 'UNAUTHENTICATED' ? 401 : 403 })
+    const safeLoans = loans.map((l) => ({
+      ...l,
+      member: toSafeMember(l.member),
+    }))
+
+    return NextResponse.json(safeLoans || [])
+  } catch (error: any) {
+    if (error?.message === "UNAUTHENTICATED" || error?.message === "UNAUTHORIZED" || error?.message === "FORBIDDEN") {
+      return NextResponse.json({ error: error.message }, { status: error.message === "UNAUTHENTICATED" ? 401 : 403 })
     }
-    console.error(error)
-    return NextResponse.json({ error: 'Failed to fetch loans' }, { status: 500 })
+    console.error("GET /api/loans error:", error)
+    return NextResponse.json({ error: "Failed to fetch loans" }, { status: 500 })
   }
 }
 
 export async function POST(req: Request) {
   try {
     const performer = await requireAuth()
-    const supabase = await createClient()
     const body = await req.json()
+    const parseResult = loanRequestSchema.safeParse(body)
 
-    let { member_id, amount, interest_rate, purpose, term_months } = body // amount in paise
+    if (!parseResult.success) {
+      return NextResponse.json({ error: parseResult.error.errors[0].message }, { status: 400 })
+    }
 
-    // Tenant and Role checks
-    let requestMemberId = member_id
-    if (performer.role === 'MEMBER') {
-      // Members can only request for themselves
+    const { amount, interest_rate, purpose, term_months } = parseResult.data
+    let requestMemberId = parseResult.data.member_id || performer.id
+    if (performer.role === "MEMBER") {
       requestMemberId = performer.id
     }
 
-    if (!requestMemberId || !amount || amount <= 0 || !term_months) {
-      return NextResponse.json({ error: 'Member, amount, and term months are required' }, { status: 400 })
-    }
+    const member = await prisma.member.findUnique({
+      where: { id: requestMemberId },
+    })
 
-    // Verify member exists and is ACTIVE in the same org
-    const { data: member, error: memberError } = await supabase
-      .from("members")
-      .select("id, name, status, is_active, organization_id")
-      .eq("id", requestMemberId)
-      .maybeSingle()
-
-    if (memberError) throw memberError
     if (!member) {
-      return NextResponse.json({ error: 'Member not found' }, { status: 404 })
+      return NextResponse.json({ error: "Member not found" }, { status: 404 })
     }
 
-    // Tenant check using string comparison
-    if (!member.organization_id || !performer.organization_id ||
-        member.organization_id !== performer.organization_id) {
-      return NextResponse.json({ error: 'Member not in your organization' }, { status: 403 })
+    if (member.organizationId !== performer.organizationId) {
+      return NextResponse.json({ error: "Member not in your organization" }, { status: 403 })
     }
 
-    // Treat null status/is_active as active
-    const isActive = member.is_active !== false &&
-      (!member.status || member.status === 'ACTIVE')
-
-    if (!isActive) {
-      return NextResponse.json({ error: 'Member is not active or does not exist' }, { status: 400 })
+    if (!member.isActive || member.status !== "ACTIVE") {
+      return NextResponse.json({ error: "Member is not active or does not exist" }, { status: 400 })
     }
 
-    // No existing ACTIVE loan for member
-    const { data: activeLoan, error: activeLoanError } = await supabase
-      .from("loans")
-      .select("id")
-      .eq("member_id", requestMemberId)
-      .eq("status", "ACTIVE")
-      .maybeSingle()
+    const activeLoan = await prisma.loan.findFirst({
+      where: {
+        memberId: requestMemberId,
+        status: "ACTIVE",
+      },
+    })
 
-    if (activeLoanError) throw activeLoanError
     if (activeLoan) {
-      return NextResponse.json({ error: 'Member already has an active loan' }, { status: 400 })
+      return NextResponse.json({ error: "Member already has an active loan" }, { status: 400 })
     }
 
-    // Amount <= max_loan_limit if set
-    const { data: org, error: orgError } = await supabase
-      .from("organizations")
-      .select("max_loan_limit")
-      .eq("id", performer.organization_id)
-      .single()
+    const org = await prisma.organization.findUnique({
+      where: { id: performer.organizationId },
+    })
 
-    if (orgError) throw orgError
-    if (org && org.max_loan_limit && amount > org.max_loan_limit) {
-      return NextResponse.json({ error: `Amount exceeds organization maximum limit of ₹${org.max_loan_limit / 100}` }, { status: 400 })
+    if (!org) {
+      return NextResponse.json({ error: "Organization not found" }, { status: 404 })
     }
 
-    // status = performer.role === 'SUPERADMIN' ? 'ACTIVE' : 'PENDING'
-    const status = performer.role === 'SUPERADMIN' ? 'ACTIVE' : 'PENDING'
-
-    const { data: loan, error: insertError } = await supabase
-      .from("loans")
-      .insert({
-        organization_id: performer.organization_id,
-        member_id: requestMemberId,
-        loan_amount: amount,
-        outstanding_amount: status === 'ACTIVE' ? amount : 0,
-        interest_rate: interest_rate || 2.0,
-        disbursed_date: new Date().toISOString().split('T')[0],
-        purpose: purpose || '',
-        term_months: term_months,
-        status,
-        requested_by: performer.id,
-        approved_by: status === 'ACTIVE' ? performer.id : null,
-        approved_at: status === 'ACTIVE' ? new Date().toISOString() : null
-      })
-      .select()
-      .single()
-
-    if (insertError) throw insertError
-
-    if (status === 'ACTIVE') {
-      const emis = calcEmiSchedule(
-        amount,
-        interest_rate || 2.0,
-        term_months,
-        new Date()
+    const amountBigInt = BigInt(amount)
+    if (org.maxLoanLimit > BigInt(0) && amountBigInt > org.maxLoanLimit) {
+      return NextResponse.json(
+        { error: `Amount exceeds organization maximum limit of ₹${Number(org.maxLoanLimit) / 100}` },
+        { status: 400 }
       )
-
-      const emiInserts = emis.map(e => ({
-        ...e,
-        loan_id: loan.id
-      }))
-
-      const { error: emiInsertError } = await supabase
-        .from("loan_emis")
-        .insert(emiInserts)
-
-      if (emiInsertError) throw emiInsertError
-    } else {
-      // Notify SuperAdmins of the pending request
-      const { data: superadmins } = await supabase
-        .from("members")
-        .select("id")
-        .eq("organization_id", performer.organization_id)
-        .eq("role", "SUPERADMIN")
-
-      if (superadmins && superadmins.length > 0) {
-        const notifications = superadmins.map(admin => ({
-          member_id: admin.id,
-          organization_id: performer.organization_id,
-          title: 'New Loan Request Awaiting Approval',
-          message: `${member.name} has requested a loan of ₹${amount / 100}. Please review.`,
-          type: 'EMI_DUE',
-          is_read: false
-        }))
-        await supabase.from("notifications").insert(notifications)
-      }
     }
 
-    await logActivity(supabase, performer.id, performer.organization_id, 'LOAN_REQUESTED', 'loan', loan.id, {
-      member_id: requestMemberId,
-      amount,
-      status
+    const status = performer.role === "SUPERADMIN" ? "ACTIVE" : "PENDING"
+    const finalInterestRate = interest_rate ?? 2.0
+
+    const loan = await prisma.$transaction(async (tx) => {
+      const createdLoan = await tx.loan.create({
+        data: {
+          organizationId: performer.organizationId,
+          memberId: requestMemberId,
+          loanAmount: amountBigInt,
+          outstandingAmount: status === "ACTIVE" ? amountBigInt : BigInt(0),
+          interestRate: finalInterestRate,
+          disbursedDate: new Date(),
+          purpose: purpose || "",
+          termMonths: term_months,
+          status,
+          requestedBy: performer.id,
+          approvedBy: status === "ACTIVE" ? performer.id : null,
+          approvedAt: status === "ACTIVE" ? new Date() : null,
+        },
+      })
+
+      if (status === "ACTIVE") {
+        const emis = calcEmiSchedule(amount, finalInterestRate, term_months, new Date())
+
+        await tx.loanEmi.createMany({
+          data: emis.map((e) => ({
+            loanId: createdLoan.id,
+            monthYear: e.month_year,
+            dueDate: new Date(e.due_date),
+            principalDue: BigInt(e.principal_due),
+            interestDue: BigInt(e.interest_due),
+            principalPaid: BigInt(e.principal_paid),
+            interestPaid: BigInt(e.interest_paid),
+            fineAmount: BigInt(e.fine_amount),
+            status: e.status,
+          })),
+        })
+      } else {
+        const superadmins = await tx.member.findMany({
+          where: {
+            organizationId: performer.organizationId,
+            role: "SUPERADMIN",
+          },
+          select: { id: true },
+        })
+
+        if (superadmins.length > 0) {
+          await tx.notification.createMany({
+            data: superadmins.map((admin) => ({
+              memberId: admin.id,
+              organizationId: performer.organizationId,
+              title: "New Loan Request Awaiting Approval",
+              message: `${member.name} has requested a loan of ₹${amount / 100}. Please review.`,
+              type: "EMI_DUE",
+              isRead: false,
+            })),
+          })
+        }
+      }
+
+      await logActivity(tx, performer.id, performer.organizationId, "LOAN_REQUESTED", "loan", createdLoan.id, {
+        member_id: requestMemberId,
+        amount,
+        status,
+      })
+
+      return createdLoan
     })
 
     return NextResponse.json(loan)
-  } catch (error) {
-    if (error instanceof Error && (error.message === 'UNAUTHENTICATED' || error.message === 'UNAUTHORIZED')) {
-      return NextResponse.json({ error: error.message }, { status: error.message === 'UNAUTHENTICATED' ? 401 : 403 })
+  } catch (error: any) {
+    if (error?.message === "UNAUTHENTICATED" || error?.message === "UNAUTHORIZED" || error?.message === "FORBIDDEN") {
+      return NextResponse.json({ error: error.message }, { status: error.message === "UNAUTHENTICATED" ? 401 : 403 })
     }
-    console.error(error)
-    return NextResponse.json({ error: 'Failed to create loan' }, { status: 500 })
+    console.error("POST /api/loans error:", error)
+    return NextResponse.json({ error: "Failed to create loan" }, { status: 500 })
   }
 }

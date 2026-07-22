@@ -1,112 +1,87 @@
-import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { requireSuperAdmin, logActivity } from "@/lib/auth"
+import prisma from "@/lib/prisma"
+import { requireSuperAdmin, logActivity, toSafeMember } from "@/lib/auth"
+import { z } from "zod"
 
-export async function PATCH(
-  req: Request,
-  context: { params: Promise<{ id: string }> }
-) {
+const roleSchema = z.object({
+  role: z.enum(["ADMIN", "MEMBER"], { message: "Invalid role. Can only assign ADMIN or MEMBER." }),
+})
+
+export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params
     const performer = await requireSuperAdmin()
-    const supabase = await createClient()
     const body = await req.json()
-    const { role: newRole } = body
+    const parseResult = roleSchema.safeParse(body)
 
-    // SUPERADMIN can only assign ADMIN or MEMBER
-    // NEVER allow assigning SUPERADMIN via this route
-    if (!['ADMIN', 'MEMBER'].includes(newRole)) {
-      return NextResponse.json(
-        { error: 'Invalid role. Can only assign ADMIN or MEMBER.' },
-        { status: 400 }
-      )
+    if (!parseResult.success) {
+      return NextResponse.json({ error: parseResult.error.errors[0].message }, { status: 400 })
     }
 
-    // Cannot change own role
+    const { role: newRole } = parseResult.data
+
     if (id === performer.id) {
-      return NextResponse.json(
-        { error: 'Cannot change your own role' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: "Cannot change your own role" }, { status: 400 })
     }
 
-    // Get target member
-    const { data: target, error: targetError } = await supabase
-      .from('members')
-      .select('id, name, role, organization_id, status')
-      .eq('id', id)
-      .single()
+    const target = await prisma.member.findUnique({
+      where: { id },
+    })
 
-    if (targetError || !target) return NextResponse.json(
-      { error: 'Member not found' }, { status: 404 }
-    )
+    if (!target) return NextResponse.json({ error: "Member not found" }, { status: 404 })
 
-    // Must be same org
-    if (target.organization_id !== performer.organization_id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' }, { status: 403 }
-      )
+    if (target.organizationId !== performer.organizationId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
     }
 
-    // Cannot touch another SUPERADMIN
-    if (target.role === 'SUPERADMIN') {
-      return NextResponse.json(
-        { error: 'Cannot change SuperAdmin role' }, { status: 403 }
-      )
+    if (target.role === "SUPERADMIN") {
+      return NextResponse.json({ error: "Cannot change SuperAdmin role" }, { status: 403 })
     }
 
-    // Must be active
-    if (target.status !== 'ACTIVE') {
-      return NextResponse.json(
-        { error: 'Member must be active' }, { status: 400 }
-      )
+    if (target.status !== "ACTIVE") {
+      return NextResponse.json({ error: "Member must be active" }, { status: 400 })
     }
 
     const oldRole = target.role
 
-    // Update role
-    const { data: updated, error: updateError } = await supabase
-      .from('members')
-      .update({ role: newRole })
-      .eq('id', id)
-      .select()
-      .single()
+    const updated = await prisma.$transaction(async (tx) => {
+      const res = await tx.member.update({
+        where: { id },
+        data: { role: newRole },
+      })
 
-    if (updateError) throw updateError
+      await tx.notification.create({
+        data: {
+          memberId: id,
+          organizationId: performer.organizationId,
+          title: "भूमिका बदलली / Role Updated",
+          message:
+            newRole === "ADMIN"
+              ? "तुम्हाला Admin म्हणून नियुक्त केले आहे. / You have been assigned as Admin."
+              : "तुमची Admin भूमिका काढली आहे. / Your Admin role has been removed.",
+          type: "ROLE_CHANGED",
+        },
+      })
 
-    // Notify member
-    await supabase.from('notifications').insert({
-      member_id: id,
-      organization_id: performer.organization_id,
-      title: 'भूमिका बदलली / Role Updated',
-      message: newRole === 'ADMIN'
-        ? 'तुम्हाला Admin म्हणून नियुक्त केले आहे. / You have been assigned as Admin.'
-        : 'तुमची Admin भूमिका काढली आहे. / Your Admin role has been removed.',
-      type: 'ROLE_CHANGED',
+      await logActivity(tx, performer.id, performer.organizationId, "ROLE_CHANGED", "member", id, {
+        from: oldRole,
+        to: newRole,
+        member_name: target.name,
+      })
+
+      return res
     })
 
-    await logActivity(
-      supabase, performer.id, performer.organization_id,
-      'ROLE_CHANGED', 'member', id,
-      { from: oldRole, to: newRole, member_name: target.name }
-    )
-
-    return NextResponse.json({ 
-      ...updated,
+    return NextResponse.json({
+      ...toSafeMember(updated),
       roleChanged: true,
-      message: 'Role updated. Member must sign out and sign in again to see changes.'
+      message: "Role updated. Member must sign out and sign in again to see changes.",
     })
-
-  } catch (error) {
-    if (error instanceof Error) {
-      if (error.message === 'UNAUTHENTICATED')
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      if (error.message === 'FORBIDDEN')
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  } catch (error: any) {
+    if (error?.message === "UNAUTHENTICATED" || error?.message === "FORBIDDEN") {
+      return NextResponse.json({ error: error.message }, { status: error.message === "UNAUTHENTICATED" ? 401 : 403 })
     }
-    console.error('[ROLE_CHANGE]', error)
-    return NextResponse.json(
-      { error: 'Failed to update role' }, { status: 500 }
-    )
+    console.error("[ROLE_CHANGE]", error)
+    return NextResponse.json({ error: "Failed to update role" }, { status: 500 })
   }
 }

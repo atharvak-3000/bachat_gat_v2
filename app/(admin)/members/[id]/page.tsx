@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
-import { requireAdminOrAbove } from "@/lib/auth"
-import { createClient } from "@/lib/supabase/server"
+import { requireAdminOrAbove, toSafeMember } from "@/lib/auth"
+import prisma from "@/lib/prisma"
 import { calcMemberStats } from "@/lib/calculations"
 import MemberDetailClient from "./MemberDetailClient"
 import type { Member } from "@/types"
@@ -14,63 +14,101 @@ export default async function MemberDetailPage({ params }: { params: Promise<{ i
   }
 
   const { id } = await params
-  const supabase = await createClient()
 
-  const [{ data: member }, { data: contributions }, { data: loans }] = await Promise.all([
-    supabase.from("members").select("*").eq("organization_id", performer.organization_id).eq("id", id).maybeSingle(),
-    supabase.from("meeting_contributions").select("*").eq("member_id", id).order("created_at", { ascending: false }),
-    supabase.from("loans").select("*").eq("organization_id", performer.organization_id).eq("member_id", id).order("created_at", { ascending: false }),
+  const [member, contributions, loans, guaranteedLoans] = await Promise.all([
+    prisma.member.findFirst({
+      where: {
+        id,
+        organizationId: performer.organization_id,
+      },
+    }),
+    prisma.meetingContribution.findMany({
+      where: { memberId: id },
+    }),
+    prisma.loan.findMany({
+      where: {
+        organizationId: performer.organization_id,
+        memberId: id,
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.loan.findMany({
+      where: {
+        organizationId: performer.organization_id,
+        guarantorId: id,
+      },
+      include: {
+        member: { select: { id: true, name: true } },
+      },
+    }),
   ])
 
   if (!member) redirect("/members")
 
-  // Fetch loans guaranteed by this member
-  const { data: guaranteedLoans } = await supabase
-    .from("loans")
-    .select("*, member:members!loans_member_id_fkey(id, name)")
-    .eq("organization_id", performer.organization_id)
-    .eq("guarantor_id", id)
+  const safeMember = toSafeMember(member)
 
-  const guaranteedList = (guaranteedLoans || []).map((gl: any) => ({
+  const guaranteedList = guaranteedLoans.map((gl) => ({
     ...gl,
-    is_overdue: false
+    organization_id: gl.organizationId,
+    member_id: gl.memberId,
+    guarantor_id: gl.guarantorId,
+    loan_amount: Number(gl.loanAmount),
+    outstanding_amount: Number(gl.outstandingAmount),
+    interest_rate: Number(gl.interestRate),
+    disbursed_date: gl.disbursedDate.toISOString().split("T")[0],
+    term_months: gl.termMonths,
+    created_at: gl.createdAt.toISOString(),
+    is_overdue: false,
+    member: gl.member,
   }))
 
   let overdueLoansCount = 0
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = new Date().toISOString().split("T")[0]
 
   if (guaranteedList.length > 0) {
-    const loanIds = guaranteedList.map(l => l.id)
-    const { data: emis } = await supabase
-      .from("loan_emis")
-      .select("loan_id, status, due_date")
-      .in("loan_id", loanIds)
+    const loanIds = guaranteedList.map((l) => l.id)
+    const emis = await prisma.loanEmi.findMany({
+      where: { loanId: { in: loanIds } },
+      select: { loanId: true, status: true, dueDate: true },
+    })
 
-    const emisList = emis || []
-    guaranteedList.forEach(l => {
-      const loanEmis = emisList.filter(e => e.loan_id === l.id)
-      const isOverdue = loanEmis.some(e => 
-        e.status === 'OVERDUE' || (e.status !== 'PAID' && e.due_date < todayStr)
+    const emisList = emis.map((e) => ({
+      loan_id: e.loanId,
+      status: e.status,
+      due_date: e.dueDate.toISOString().split("T")[0],
+    }))
+
+    guaranteedList.forEach((l) => {
+      const loanEmis = emisList.filter((e) => e.loan_id === l.id)
+      const isOverdue = loanEmis.some(
+        (e) => e.status === "OVERDUE" || (e.status !== "PAID" && e.due_date < todayStr)
       )
       l.is_overdue = isOverdue
-      if (isOverdue && l.status === 'ACTIVE') {
+      if (isOverdue && l.status === "ACTIVE") {
         overdueLoansCount++
       }
     })
   }
 
   const stats = calcMemberStats(
-    (contributions ?? []).map((c) => ({ savings_amount: c.savings_amount, interest_paid: c.interest_paid, is_present: c.is_present })),
-    (loans ?? []).map((l) => ({ outstanding_amount: l.outstanding_amount, status: l.status }))
+    contributions.map((c) => ({
+      savings_amount: Number(c.savingsAmount),
+      interest_paid: Number(c.interestPaid),
+      is_present: c.isPresent,
+    })),
+    loans.map((l) => ({
+      outstanding_amount: Number(l.outstandingAmount),
+      status: l.status as any,
+    }))
   )
 
-  const activeGuaranteedCount = guaranteedList.filter(l => ['ACTIVE', 'PENDING'].includes(l.status)).length
+  const activeGuaranteedCount = guaranteedList.filter((l) => ["ACTIVE", "PENDING"].includes(l.status)).length
 
   return (
-    <MemberDetailClient 
-      member={member as Member}
+    <MemberDetailClient
+      member={safeMember as unknown as Member}
       stats={stats}
-      guaranteedLoans={guaranteedList}
+      guaranteedLoans={guaranteedList as any}
       overdueCount={overdueLoansCount}
       activeGuaranteedCount={activeGuaranteedCount}
       maxGuarantorLoans={performer.organization.max_guarantor_loans ?? 3}

@@ -1,25 +1,31 @@
 import { NextResponse } from "next/server"
+import prisma from "@/lib/prisma"
 import { getCurrentMember } from "@/lib/auth"
-import { createClient } from "@/lib/supabase/server"
 
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const params = await context.params;
+    const params = await context.params
     const member = await getCurrentMember()
     if (!member) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const supabase = await createClient()
+    const notification = await prisma.notification.findFirst({
+      where: {
+        id: params.id,
+        memberId: member.id,
+      },
+    })
 
-    const { error } = await supabase
-      .from("notifications")
-      .update({ is_read: true })
-      .eq("id", params.id)
-      .eq("member_id", member.id)
+    if (!notification) {
+      return NextResponse.json({ error: "Notification not found" }, { status: 404 })
+    }
 
-    if (error) throw error
+    await prisma.notification.update({
+      where: { id: notification.id },
+      data: { isRead: true },
+    })
 
     return NextResponse.json({ success: true })
   } catch (error: any) {

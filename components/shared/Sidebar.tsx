@@ -2,7 +2,6 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
 import type { MemberWithOrg } from "@/types"
 import NotificationBell from "./NotificationBell"
 import DarkModeToggle from "../ui/DarkModeToggle"
@@ -20,8 +19,7 @@ export default function Sidebar({ member, pendingCount = 0 }: { member: MemberWi
   ]
 
   const signOut = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
+    await fetch("/api/auth/signout", { method: "POST" })
     router.push('/sign-in')
   }
 

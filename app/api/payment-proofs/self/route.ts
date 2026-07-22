@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
+import prisma from "@/lib/prisma"
 import { getCurrentMember } from "@/lib/auth"
-import { createClient } from "@/lib/supabase/server"
 
 export async function GET() {
   try {
@@ -9,15 +9,13 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const supabase = await createClient()
-
-    const { data: proofs, error } = await supabase
-      .from("payment_proofs")
-      .select("*, meeting:meetings(month_year)")
-      .eq("member_id", member.id)
-      .order("created_at", { ascending: false })
-
-    if (error) throw error
+    const proofs = await prisma.paymentProof.findMany({
+      where: { memberId: member.id },
+      include: {
+        meeting: { select: { monthYear: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    })
 
     return NextResponse.json({ proofs })
   } catch (error: any) {

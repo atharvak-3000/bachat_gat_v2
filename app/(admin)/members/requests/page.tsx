@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
+import prisma from "@/lib/prisma"
 import { requireAdminOrAbove } from "@/lib/auth"
 
 export default async function MemberRequestsPage() {
@@ -10,15 +10,24 @@ export default async function MemberRequestsPage() {
     redirect("/sign-in")
   }
 
-  const supabase = await createClient()
-  const { data: pending } = await supabase
-    .from("members")
-    .select("id,name,phone,created_at,user_id")
-    .eq("organization_id", performer.organization_id)
-    .eq("status", "PENDING")
-    .order("created_at", { ascending: false })
+  const pending = await prisma.member.findMany({
+    where: {
+      organizationId: performer.organization_id,
+      status: "PENDING",
+    },
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: "desc" },
+  })
 
-  const rows = pending ?? []
+  const rows = pending.map((m) => ({
+    ...m,
+    created_at: m.createdAt.toISOString(),
+  }))
 
   return (
     <div className="p-6">

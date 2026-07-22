@@ -1,164 +1,158 @@
-import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { requireSuperAdmin, requireAdminOrAbove, logActivity } from "@/lib/auth"
+import prisma from "@/lib/prisma"
+import { requireAdminOrAbove, logActivity } from "@/lib/auth"
 import { calcMeetingTotals, getNextMonthStart, addP } from "@/lib/calculations"
+import { z } from "zod"
+
+const createMeetingSchema = z.object({
+  meeting_date: z.string().min(1, "Meeting date is required"),
+  opening_balance: z.number().optional(),
+})
 
 export async function GET(req: Request) {
   try {
     const performer = await requireAdminOrAbove()
-    const supabase = await createClient()
 
-    const { data: meetings, error } = await supabase
-      .from("meetings")
-      .select("*")
-      .eq("organization_id", performer.organization_id)
-      .order("month_year", { ascending: false })
+    const meetings = await prisma.meeting.findMany({
+      where: { organizationId: performer.organizationId },
+      orderBy: { monthYear: "desc" },
+    })
 
-    if (error) throw error
     return NextResponse.json(meetings || [])
-  } catch (error) {
-    if (error instanceof Error && (error.message === 'UNAUTHENTICATED' || error.message === 'UNAUTHORIZED')) {
-      return NextResponse.json({ error: error.message }, { status: error.message === 'UNAUTHENTICATED' ? 401 : 403 })
+  } catch (error: any) {
+    if (error?.message === "UNAUTHENTICATED" || error?.message === "UNAUTHORIZED" || error?.message === "FORBIDDEN") {
+      return NextResponse.json({ error: error.message }, { status: error.message === "UNAUTHENTICATED" ? 401 : 403 })
     }
-    console.error(error)
-    return NextResponse.json({ error: 'Failed to fetch meetings' }, { status: 500 })
+    console.error("GET /api/meetings error:", error)
+    return NextResponse.json({ error: "Failed to fetch meetings" }, { status: 500 })
   }
 }
 
 export async function POST(req: Request) {
   try {
     const performer = await requireAdminOrAbove()
-    const supabase = await createClient()
     const body = await req.json()
-    const { meeting_date, opening_balance } = body
+    const parseResult = createMeetingSchema.safeParse(body)
 
-    if (!meeting_date) {
-      return NextResponse.json({ error: 'Meeting date is required' }, { status: 400 })
+    if (!parseResult.success) {
+      return NextResponse.json({ error: parseResult.error.errors[0].message }, { status: 400 })
     }
 
-    // Generate unique month_year using date + timestamp
-    // so multiple meetings can exist for same month
+    const { meeting_date, opening_balance } = parseResult.data
+
     const meetingDate = new Date(meeting_date)
-    const month_year = `${meetingDate.getFullYear()}-${String(
-      meetingDate.getMonth() + 1).padStart(2, '0')}-${Date.now()}`
+    const month_year = `${meetingDate.getFullYear()}-${String(meetingDate.getMonth() + 1).padStart(2, "0")}-${Date.now()}`
 
-    // Auto-fetch closing balance of last finalized meeting
-    const { data: lastMeeting } = await supabase
-      .from('meetings')
-      .select('id, month_year, status, opening_balance, meeting_date')
-      .eq('organization_id', performer.organization_id)
-      .eq('status', 'FINALIZED')
-      .order('month_year', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    const lastMeeting = await prisma.meeting.findFirst({
+      where: {
+        organizationId: performer.organizationId,
+        status: "FINALIZED",
+      },
+      orderBy: { monthYear: "desc" },
+    })
 
-    // Default to the client-provided opening balance (converted to paise)
-    let opening_balance_calculated = typeof opening_balance === 'number' ? opening_balance : 0
+    let opening_balance_calculated = typeof opening_balance === "number" ? opening_balance : 0
 
     if (lastMeeting) {
-      // Recalculate closing balance of last meeting to get accurate carry-forward
-      const { data: lastContribs } = await supabase
-        .from('meeting_contributions')
-        .select('savings_amount, loan_repayment, interest_paid, penalty_paid, other_amount, is_present')
-        .eq('meeting_id', lastMeeting.id)
+      const lastContribs = await prisma.meetingContribution.findMany({
+        where: { meetingId: lastMeeting.id },
+      })
+      const lastExpenses = await prisma.meetingExpense.findMany({
+        where: { meetingId: lastMeeting.id },
+      })
+      const lastIncome = await prisma.meetingIncome.findMany({
+        where: { meetingId: lastMeeting.id },
+      })
 
-      const { data: lastExpenses } = await supabase
-        .from('meeting_expenses')
-        .select('amount')
-        .eq('meeting_id', lastMeeting.id)
+      const nextMonthDate = new Date(getNextMonthStart(lastMeeting.meetingDate.toISOString().split("T")[0]))
 
-      const { data: lastIncome } = await supabase
-        .from('meeting_income')
-        .select('amount')
-        .eq('meeting_id', lastMeeting.id)
-
-      const { data: lastLoans } = await supabase
-        .from('loans')
-        .select('loan_amount')
-        .eq('organization_id', performer.organization_id)
-        // Loans disbursed in that meeting's month
-        .gte('disbursed_date', lastMeeting.meeting_date)
-        .lt('disbursed_date', getNextMonthStart(lastMeeting.meeting_date))
-        .in('status', ['ACTIVE', 'CLOSED'])
+      const lastLoans = await prisma.loan.findMany({
+        where: {
+          organizationId: performer.organizationId,
+          disbursedDate: {
+            gte: lastMeeting.meetingDate,
+            lt: nextMonthDate,
+          },
+          status: { in: ["ACTIVE", "CLOSED"] },
+        },
+      })
 
       const totals = calcMeetingTotals({
-        opening_balance: lastMeeting.opening_balance,
-        contributions: lastContribs || [],
-        loans_issued_total: addP(...(lastLoans || []).map((l: any) => l.loan_amount)),
-        other_expenses_total: addP(...(lastExpenses || []).map((e: any) => e.amount)),
-        other_income_total: addP(...(lastIncome || []).map((i: any) => i.amount))
+        opening_balance: Number(lastMeeting.openingBalance),
+        contributions: lastContribs.map((c) => ({
+          savings_amount: Number(c.savingsAmount),
+          loan_repayment: Number(c.loanRepayment),
+          interest_paid: Number(c.interestPaid),
+          penalty_paid: Number(c.penaltyPaid),
+          other_amount: Number(c.otherAmount),
+          is_present: c.isPresent,
+        })),
+        loans_issued_total: addP(...lastLoans.map((l) => Number(l.loanAmount))),
+        other_expenses_total: addP(...lastExpenses.map((e) => Number(e.amount))),
+        other_income_total: addP(...lastIncome.map((i) => Number(i.amount))),
       })
 
       opening_balance_calculated = Math.max(0, totals.closing_balance)
     }
 
-    // Get organization default savings
-    const { data: org, error: orgError } = await supabase
-      .from("organizations")
-      .select("monthly_saving_amount")
-      .eq("id", performer.organization_id)
-      .single()
-
-    if (orgError) throw orgError
-
-    // 2. Insert meeting
-    const { data: meeting, error: insertError } = await supabase
-      .from("meetings")
-      .insert({
-        organization_id: performer.organization_id,
-        meeting_date,
-        month_year,
-        opening_balance: opening_balance_calculated,
-        status: 'DRAFT',
-        created_by: performer.id
-      })
-      .select()
-      .single()
-
-    if (insertError) throw insertError
-
-    // 3. Fetch all ACTIVE members in this organization
-    const { data: activeMembers, error: membersError } = await supabase
-      .from("members")
-      .select("id")
-      .eq("organization_id", performer.organization_id)
-      .eq("status", "ACTIVE")
-      .eq("is_active", true)
-
-    if (membersError) throw membersError
-
-    // 4. Bulk insert contributions (one per member)
-    if (activeMembers && activeMembers.length > 0) {
-      const contributions = activeMembers.map(m => ({
-        meeting_id: meeting.id,
-        member_id: m.id,
-        savings_amount: org.monthly_saving_amount || 0,
-        loan_repayment: 0,
-        interest_paid: 0,
-        penalty_paid: 0,
-        other_amount: 0,
-        is_present: true
-      }))
-
-      const { error: contribError } = await supabase
-        .from("meeting_contributions")
-        .insert(contributions)
-
-      if (contribError) throw contribError
-    }
-
-    // 5. Log activity
-    await logActivity(supabase, performer.id, performer.organization_id, 'MEETING_CREATED', 'meeting', meeting.id, {
-      month_year,
-      meeting_date
+    const org = await prisma.organization.findUnique({
+      where: { id: performer.organizationId },
     })
 
-    return NextResponse.json(meeting)
-  } catch (error) {
-    if (error instanceof Error && (error.message === 'UNAUTHENTICATED' || error.message === 'UNAUTHORIZED')) {
-      return NextResponse.json({ error: error.message }, { status: error.message === 'UNAUTHENTICATED' ? 401 : 403 })
+    if (!org) {
+      return NextResponse.json({ error: "Organization not found" }, { status: 404 })
     }
-    console.error(error)
-    return NextResponse.json({ error: 'Failed to create meeting' }, { status: 500 })
+
+    const activeMembers = await prisma.member.findMany({
+      where: {
+        organizationId: performer.organizationId,
+        status: "ACTIVE",
+        isActive: true,
+      },
+      select: { id: true },
+    })
+
+    const newMeeting = await prisma.$transaction(async (tx) => {
+      const meeting = await tx.meeting.create({
+        data: {
+          organizationId: performer.organizationId,
+          meetingDate,
+          monthYear: month_year,
+          openingBalance: BigInt(opening_balance_calculated),
+          status: "DRAFT",
+          createdBy: performer.id,
+        },
+      })
+
+      if (activeMembers && activeMembers.length > 0) {
+        await tx.meetingContribution.createMany({
+          data: activeMembers.map((m) => ({
+            meetingId: meeting.id,
+            memberId: m.id,
+            savingsAmount: org.monthlySavingAmount,
+            loanRepayment: BigInt(0),
+            interestPaid: BigInt(0),
+            penaltyPaid: BigInt(0),
+            otherAmount: BigInt(0),
+            isPresent: true,
+          })),
+        })
+      }
+
+      await logActivity(tx, performer.id, performer.organizationId, "MEETING_CREATED", "meeting", meeting.id, {
+        month_year,
+        meeting_date,
+      })
+
+      return meeting
+    })
+
+    return NextResponse.json(newMeeting)
+  } catch (error: any) {
+    if (error?.message === "UNAUTHENTICATED" || error?.message === "UNAUTHORIZED" || error?.message === "FORBIDDEN") {
+      return NextResponse.json({ error: error.message }, { status: error.message === "UNAUTHENTICATED" ? 401 : 403 })
+    }
+    console.error("POST /api/meetings error:", error)
+    return NextResponse.json({ error: "Failed to create meeting" }, { status: 500 })
   }
 }

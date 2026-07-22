@@ -1,5 +1,5 @@
-import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import prisma from "@/lib/prisma"
 import { requireSuperAdmin, logActivity } from "@/lib/auth"
 import { calcEmiSchedule } from "@/lib/calculations"
 
@@ -9,155 +9,146 @@ export async function POST(
 ) {
   try {
     const performer = await requireSuperAdmin()
-    const supabase = await createClient()
     const { id } = await params
 
     let body: any = {}
     try {
       body = await req.json()
-    } catch (e) {
+    } catch {
       // body is optional
     }
     const { guarantor_id } = body
 
-    // Fetch loan and verify org
-    const { data: loan, error: loanError } = await supabase
-      .from("loans")
-      .select("*, member:members!loans_member_id_fkey(*)")
-      .eq("id", id)
-      .eq("organization_id", performer.organization_id)
-      .maybeSingle()
+    const loan = await prisma.loan.findFirst({
+      where: {
+        id,
+        organizationId: performer.organizationId,
+      },
+      include: { member: true },
+    })
 
-    if (loanError) throw loanError
     if (!loan) {
-      return NextResponse.json({ error: 'Loan not found' }, { status: 404 })
+      return NextResponse.json({ error: "Loan not found" }, { status: 404 })
     }
 
-    if (loan.status !== 'PENDING') {
-      return NextResponse.json({ error: 'Loan is not in PENDING status' }, { status: 400 })
+    if (loan.status !== "PENDING") {
+      return NextResponse.json({ error: "Loan is not in PENDING status" }, { status: 400 })
     }
 
     if (guarantor_id) {
-      if (loan.member_id === guarantor_id) {
+      if (loan.memberId === guarantor_id) {
+        return NextResponse.json({ error: "Applicant cannot be their own guarantor" }, { status: 400 })
+      }
+
+      const guarantorMember = await prisma.member.findUnique({
+        where: { id: guarantor_id },
+      })
+
+      if (!guarantorMember) {
+        return NextResponse.json({ error: "Guarantor not found" }, { status: 404 })
+      }
+
+      if (guarantorMember.organizationId !== performer.organizationId) {
+        return NextResponse.json({ error: "Guarantor must be in the same organization" }, { status: 403 })
+      }
+
+      const isGuarantorActive = guarantorMember.isActive && guarantorMember.status === "ACTIVE"
+      if (!isGuarantorActive) {
+        return NextResponse.json({ error: "Guarantor is not active" }, { status: 400 })
+      }
+
+      const guaranteedLoansCount = await prisma.loan.count({
+        where: {
+          guarantorId: guarantor_id,
+          status: { in: ["ACTIVE", "PENDING"] },
+          id: { not: id },
+        },
+      })
+
+      const limit = performer.organization.maxGuarantorLoans ?? 3
+      if (guaranteedLoansCount >= limit) {
         return NextResponse.json(
-          { error: 'Applicant cannot be their own guarantor' },
+          {
+            error: "GUARANTOR_LIMIT_REACHED",
+            message: `This member is already guarantor for ${guaranteedLoansCount} loans (max allowed: ${limit})`,
+          },
           { status: 400 }
         )
       }
-      const { data: guarantorMember } = await supabase
-        .from('members')
-        .select('id, name, status, is_active, organization_id')
-        .eq('id', guarantor_id)
-        .maybeSingle()
-
-      if (!guarantorMember) {
-        return NextResponse.json({ error: 'Guarantor not found' }, { status: 404 })
-      }
-
-      if (guarantorMember.organization_id !== performer.organization_id) {
-        return NextResponse.json(
-          { error: 'Guarantor must be in the same organization' },
-          { status: 403 }
-        )
-      }
-
-      const isGuarantorActive = guarantorMember.is_active !== false &&
-        (!guarantorMember.status || guarantorMember.status === 'ACTIVE')
-
-      if (!isGuarantorActive) {
-        return NextResponse.json({ error: 'Guarantor is not active' }, { status: 400 })
-      }
-
-      // Count guarantor's current active/pending loans they are guaranteeing
-      const { count: guaranteedLoansCount, error: countError } = await supabase
-        .from('loans')
-        .select('id', { count: 'exact', head: true })
-        .eq('guarantor_id', guarantor_id)
-        .in('status', ['ACTIVE', 'PENDING'])
-        .neq('id', id)
-
-      if (countError) throw countError
-
-      const limit = performer.organization.max_guarantor_loans ?? 3
-      if ((guaranteedLoansCount ?? 0) >= limit) {
-        return NextResponse.json({
-          error: 'GUARANTOR_LIMIT_REACHED',
-          message: `This member is already guarantor for ${guaranteedLoansCount} loans (max allowed: ${limit})`
-        }, { status: 400 })
-      }
     }
 
-    const updates: Record<string, any> = {
-      status: 'ACTIVE',
-      outstanding_amount: loan.loan_amount,
-      approved_by: performer.id,
-      approved_at: new Date().toISOString(),
-      disbursed_date: new Date().toISOString().split('T')[0] // Set disbursement date to today
-    }
+    const updatedLoan = await prisma.$transaction(async (tx) => {
+      const data: any = {
+        status: "ACTIVE",
+        outstandingAmount: loan.loanAmount,
+        approvedBy: performer.id,
+        approvedAt: new Date(),
+        disbursedDate: new Date(),
+      }
 
-    if (guarantor_id !== undefined) {
-      updates.guarantor_id = guarantor_id || null
-    }
+      if (guarantor_id !== undefined) {
+        data.guarantorId = guarantor_id || null
+      }
 
-    // Update status PENDING -> ACTIVE
-    const { data: updatedLoan, error: updateError } = await supabase
-      .from("loans")
-      .update(updates)
-      .eq("id", id)
-      .select()
-      .single()
-
-    if (updateError) throw updateError
-
-    if (guarantor_id) {
-      await logActivity(supabase, performer.id, performer.organization_id, 'GUARANTOR_ASSIGNED', 'loan', loan.id, {
-        member_id: loan.member_id,
-        guarantor_id,
-        loan_id: loan.id
+      const res = await tx.loan.update({
+        where: { id },
+        data,
       })
-    }
 
-    // Generate EMI schedule -> insert
-    const emis = calcEmiSchedule(
-      loan.loan_amount,
-      loan.interest_rate || 2.0,
-      loan.term_months || 12,
-      new Date()
-    )
+      if (guarantor_id) {
+        await logActivity(tx, performer.id, performer.organizationId, "GUARANTOR_ASSIGNED", "loan", loan.id, {
+          member_id: loan.memberId,
+          guarantor_id,
+          loan_id: loan.id,
+        })
+      }
 
-    const emiInserts = emis.map(e => ({
-      ...e,
-      loan_id: loan.id
-    }))
+      const emis = calcEmiSchedule(
+        Number(loan.loanAmount),
+        Number(loan.interestRate) || 2.0,
+        loan.termMonths || 12,
+        new Date()
+      )
 
-    const { error: emiError } = await supabase
-      .from("loan_emis")
-      .insert(emiInserts)
+      await tx.loanEmi.createMany({
+        data: emis.map((e) => ({
+          loanId: loan.id,
+          monthYear: e.month_year,
+          dueDate: new Date(e.due_date),
+          principalDue: BigInt(e.principal_due),
+          interestDue: BigInt(e.interest_due),
+          principalPaid: BigInt(e.principal_paid),
+          interestPaid: BigInt(e.interest_paid),
+          fineAmount: BigInt(e.fine_amount),
+          status: e.status,
+        })),
+      })
 
-    if (emiError) throw emiError
+      await tx.notification.create({
+        data: {
+          memberId: loan.memberId,
+          organizationId: performer.organizationId,
+          title: "Loan Approved / कर्ज मंजूर झाले",
+          message: `Your loan request of ₹${Number(loan.loanAmount) / 100} has been approved by the SuperAdmin.`,
+          type: "LOAN_APPROVED",
+          isRead: false,
+        },
+      })
 
-    // Notify member
-    await supabase.from("notifications").insert({
-      member_id: loan.member_id,
-      organization_id: performer.organization_id,
-      title: 'Loan Approved / कर्ज मंजूर झाले',
-      message: `Your loan request of ₹${loan.loan_amount / 100} has been approved by the SuperAdmin.`,
-      type: 'LOAN_APPROVED',
-      is_read: false
-    })
+      await logActivity(tx, performer.id, performer.organizationId, "LOAN_APPROVED", "loan", loan.id, {
+        member_id: loan.memberId,
+        amount: Number(loan.loanAmount),
+      })
 
-    // Log activity
-    await logActivity(supabase, performer.id, performer.organization_id, 'LOAN_APPROVED', 'loan', loan.id, {
-      member_id: loan.member_id,
-      amount: loan.loan_amount
+      return res
     })
 
     return NextResponse.json(updatedLoan)
-  } catch (error) {
-    if (error instanceof Error && (error.message === 'UNAUTHENTICATED' || error.message === 'UNAUTHORIZED')) {
-      return NextResponse.json({ error: error.message }, { status: error.message === 'UNAUTHENTICATED' ? 401 : 403 })
+  } catch (error: any) {
+    if (error?.message === "UNAUTHENTICATED" || error?.message === "UNAUTHORIZED" || error?.message === "FORBIDDEN") {
+      return NextResponse.json({ error: error.message }, { status: error.message === "UNAUTHENTICATED" ? 401 : 403 })
     }
-    console.error(error)
-    return NextResponse.json({ error: 'Failed to approve loan' }, { status: 500 })
+    console.error("POST /api/loans/[id]/approve error:", error)
+    return NextResponse.json({ error: "Failed to approve loan" }, { status: 500 })
   }
 }

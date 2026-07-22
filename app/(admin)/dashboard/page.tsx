@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
-import { requireAdminOrAbove } from "@/lib/auth"
-import { createClient } from "@/lib/supabase/server"
+import { requireAdminOrAbove, toSafeMember } from "@/lib/auth"
+import prisma from "@/lib/prisma"
 import type { ActivityLog, Member, Meeting, Loan, LoanEmi } from "@/types"
 import { getCurrentMonthYear, calcMeetingTotals } from "@/lib/calculations"
 import DashboardClient from "./DashboardClient"
@@ -13,112 +13,118 @@ export default async function DashboardPage() {
     redirect("/sign-in")
   }
 
-  const supabase = await createClient()
-
-  // 1. Fetch data in parallel
-  const [
-    { data: allMembers },
-    { data: meetings },
-    { data: loans },
-    { data: recentLogs }
-  ] = await Promise.all([
-    supabase
-      .from("members")
-      .select("*")
-      .eq("organization_id", performer.organization_id)
-      .order("member_number"),
-    supabase
-      .from("meetings")
-      .select("*")
-      .eq("organization_id", performer.organization_id)
-      .order("month_year", { ascending: false }),
-    supabase
-      .from("loans")
-      .select("*, member:members!loans_member_id_fkey(*)")
-      .eq("organization_id", performer.organization_id),
-    supabase
-      .from("activity_logs")
-      .select("*")
-      .eq("organization_id", performer.organization_id)
-      .order("created_at", { ascending: false })
-      .limit(10)
+  const [allMembers, meetings, loans, recentLogs, expenses, incomes] = await Promise.all([
+    prisma.member.findMany({
+      where: { organizationId: performer.organization_id },
+      orderBy: { memberNumber: "asc" },
+    }),
+    prisma.meeting.findMany({
+      where: { organizationId: performer.organization_id },
+      orderBy: { monthYear: "desc" },
+    }),
+    prisma.loan.findMany({
+      where: { organizationId: performer.organization_id },
+      include: { member: true },
+    }),
+    prisma.activityLog.findMany({
+      where: { organizationId: performer.organization_id },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+    prisma.meetingExpense.findMany(),
+    prisma.meetingIncome.findMany(),
   ])
 
-  const membersList = (allMembers || []) as Member[]
-  const meetingsList = (meetings || []) as Meeting[]
-  const loansList = (loans || []) as (Loan & { member: Member })[]
-  const logsList = (recentLogs || []) as ActivityLog[]
+  const safeMembersList = allMembers.map((m) => toSafeMember(m)) as unknown as Member[]
+  const meetingsList = meetings.map((m) => ({
+    ...m,
+    organization_id: m.organizationId,
+    month_year: m.monthYear,
+    meeting_date: m.meetingDate.toISOString().split("T")[0],
+    opening_balance: Number(m.openingBalance),
+    created_at: m.createdAt.toISOString(),
+  })) as unknown as Meeting[]
 
-  const activeMembers = membersList.filter(m => m.status === 'ACTIVE' && m.is_active)
-  const pendingMembers = membersList.filter(m => m.status === 'PENDING')
-  
-  // Fetch expenses and incomes to get exact meeting receipts & closing balance
-  const { data: expenses } = await supabase
-    .from("meeting_expenses")
-    .select("meeting_id, amount")
-  const { data: incomes } = await supabase
-    .from("meeting_income")
-    .select("meeting_id, amount")
+  const loansList = loans.map((l) => ({
+    ...l,
+    organization_id: l.organizationId,
+    member_id: l.memberId,
+    loan_amount: Number(l.loanAmount),
+    outstanding_amount: Number(l.outstandingAmount),
+    interest_rate: Number(l.interestRate),
+    disbursed_date: l.disbursedDate.toISOString().split("T")[0],
+    term_months: l.termMonths,
+    created_at: l.createdAt.toISOString(),
+    member: toSafeMember(l.member),
+  })) as unknown as (Loan & { member: Member })[]
 
-  const exps = expenses || []
-  const incs = incomes || []
+  const logsList = recentLogs.map((log) => ({
+    ...log,
+    organization_id: log.organizationId,
+    performed_by: log.performedBy,
+    entity_type: log.entityType,
+    entity_id: log.entityId,
+    created_at: log.createdAt.toISOString(),
+  })) as unknown as ActivityLog[]
 
-  // 2. Fetch all contributions for corpus calc
-  const memberIds = activeMembers.map(m => m.id)
+  const activeMembers = safeMembersList.filter((m) => m.status === "ACTIVE" && m.is_active)
+  const pendingMembers = safeMembersList.filter((m) => m.status === "PENDING")
+
+  const exps = expenses.map((e) => ({ meeting_id: e.meetingId, amount: Number(e.amount) }))
+  const incs = incomes.map((i) => ({ meeting_id: i.meetingId, amount: Number(i.amount) }))
+
+  const memberIds = activeMembers.map((m) => m.id)
   let allContributions: any[] = []
-  
+
   if (memberIds.length > 0) {
-    const { data: contribs } = await supabase
-      .from("meeting_contributions")
-      .select("savings_amount, penalty_paid, loan_repayment, interest_paid, other_amount, meeting_id")
-      .in("member_id", memberIds)
-    
-    allContributions = contribs || []
+    const contribs = await prisma.meetingContribution.findMany({
+      where: { memberId: { in: memberIds } },
+    })
+    allContributions = contribs.map((c) => ({
+      savings_amount: Number(c.savingsAmount),
+      penalty_paid: Number(c.penaltyPaid),
+      loan_repayment: Number(c.loanRepayment),
+      interest_paid: Number(c.interestPaid),
+      other_amount: Number(c.otherAmount),
+      meeting_id: c.meetingId,
+      is_present: c.isPresent,
+    }))
   }
 
-  // Total Corpus = closing balance of latest FINALIZED meeting
   let totalCorpus = 0
 
   const finalizedMeetings = meetingsList
-    .filter(m => m.status === 'FINALIZED')
-    .sort((a, b) => 
-      new Date(b.meeting_date).getTime() - 
-      new Date(a.meeting_date).getTime()
-    )
+    .filter((m) => m.status === "FINALIZED")
+    .sort((a, b) => new Date(b.meeting_date).getTime() - new Date(a.meeting_date).getTime())
 
   if (finalizedMeetings.length > 0) {
     const latestMeeting = finalizedMeetings[0]
-    
-    // Get contributions for latest meeting
-    const { data: latestContribs } = await supabase
-      .from('meeting_contributions')
-      .select('savings_amount, penalty_paid, loan_repayment, interest_paid, other_amount, is_present')
-      .eq('meeting_id', latestMeeting.id)
+
+    const latestContribs = await prisma.meetingContribution.findMany({
+      where: { meetingId: latestMeeting.id },
+    })
 
     const latestExps = exps
-      .filter(e => e.meeting_id === latestMeeting.id)
+      .filter((e) => e.meeting_id === latestMeeting.id)
       .reduce((sum, e) => sum + e.amount, 0)
-    
+
     const latestIncs = incs
-      .filter(i => i.meeting_id === latestMeeting.id)
+      .filter((i) => i.meeting_id === latestMeeting.id)
       .reduce((sum, i) => sum + i.amount, 0)
 
     const latestLoans = loansList
-      .filter(l => 
-        l.disbursed_date === latestMeeting.meeting_date && 
-        ['ACTIVE', 'CLOSED'].includes(l.status)
-      )
+      .filter((l) => l.disbursed_date === latestMeeting.meeting_date && ["ACTIVE", "CLOSED"].includes(l.status))
       .reduce((sum, l) => sum + l.loan_amount, 0)
 
     const totals = calcMeetingTotals({
       opening_balance: latestMeeting.opening_balance,
-      contributions: (latestContribs || []).map((c: any) => ({
-        savings_amount: c.savings_amount || 0,
-        loan_repayment: c.loan_repayment || 0,
-        interest_paid: c.interest_paid || 0,
-        penalty_paid: c.penalty_paid || 0,
-        other_amount: c.other_amount || 0,
-        is_present: c.is_present ?? true,
+      contributions: latestContribs.map((c) => ({
+        savings_amount: Number(c.savingsAmount),
+        loan_repayment: Number(c.loanRepayment),
+        interest_paid: Number(c.interestPaid),
+        penalty_paid: Number(c.penaltyPaid),
+        other_amount: Number(c.otherAmount),
+        is_present: c.isPresent,
       })),
       loans_issued_total: latestLoans,
       other_expenses_total: latestExps,
@@ -128,50 +134,51 @@ export default async function DashboardPage() {
     totalCorpus = totals.closing_balance
   }
 
-  const activeLoans = loansList.filter(l => l.status === 'ACTIVE')
-  const pendingLoans = loansList.filter(l => l.status === 'PENDING')
+  const activeLoans = loansList.filter((l) => l.status === "ACTIVE")
+  const pendingLoans = loansList.filter((l) => l.status === "PENDING")
   const totalOutstanding = activeLoans.reduce((sum, l) => sum + (l.outstanding_amount || 0), 0)
 
-  // Current Month/Year meeting check
   const currentMonth = getCurrentMonthYear()
-  const currentMeeting = meetingsList.find(m => m.month_year === currentMonth)
+  const currentMeeting = meetingsList.find((m) => m.month_year === currentMonth)
   const pendingLoanCount = pendingLoans.length
 
-  // Fetch overdue EMI count per loan
-  const todayStr = new Date().toISOString().split('T')[0]
-  const { data: overdueEmis } = await supabase
-    .from("loan_emis")
-    .select("loan_id, due_date")
-    .neq("status", "PAID")
-    .lt("due_date", todayStr)
+  const todayStr = new Date().toISOString().split("T")[0]
+  const overdueEmis = await prisma.loanEmi.findMany({
+    where: {
+      status: { not: "PAID" },
+      dueDate: { lt: new Date(todayStr) },
+    },
+    select: { loanId: true, dueDate: true },
+  })
 
-  const overdueEmiList = (overdueEmis || []) as Pick<LoanEmi, 'loan_id' | 'due_date'>[]
-  
-  // Calculate overdue loans list
-  const overdueLoansList = activeLoans.map(l => {
-    const loanOverdues = overdueEmiList.filter(e => e.loan_id === l.id)
-    if (loanOverdues.length === 0) return null
-    
-    // Calculate max days overdue
-    const earliestDueDate = new Date(Math.min(...loanOverdues.map(e => new Date(e.due_date).getTime())))
-    const daysOverdue = Math.floor((Date.now() - earliestDueDate.getTime()) / 86400000)
+  const overdueEmiList = overdueEmis.map((e) => ({
+    loan_id: e.loanId,
+    due_date: e.dueDate.toISOString().split("T")[0],
+  }))
 
-    return {
-      ...l,
-      days_overdue: daysOverdue,
-      overdue_count: loanOverdues.length
-    }
-  }).filter(Boolean) as (Loan & { member: Member; days_overdue: number; overdue_count: number })[]
+  const overdueLoansList = activeLoans
+    .map((l) => {
+      const loanOverdues = overdueEmiList.filter((e) => e.loan_id === l.id)
+      if (loanOverdues.length === 0) return null
 
-  // Computed meetings (last 5)
-  const recentMeetings = meetingsList.slice(0, 5).map(m => {
-    const mContribs = allContributions.filter(c => c.meeting_id === m.id)
-    const mExps = exps.filter(e => e.meeting_id === m.id).reduce((sum, e) => sum + e.amount, 0)
-    const mIncs = incs.filter(i => i.meeting_id === m.id).reduce((sum, i) => sum + i.amount, 0)
-    
-    // active issued loans disbursed in this meeting
+      const earliestDueDate = new Date(Math.min(...loanOverdues.map((e) => new Date(e.due_date).getTime())))
+      const daysOverdue = Math.floor((Date.now() - earliestDueDate.getTime()) / 86400000)
+
+      return {
+        ...l,
+        days_overdue: daysOverdue,
+        overdue_count: loanOverdues.length,
+      }
+    })
+    .filter(Boolean) as (Loan & { member: Member; days_overdue: number; overdue_count: number })[]
+
+  const recentMeetings = meetingsList.slice(0, 5).map((m) => {
+    const mContribs = allContributions.filter((c) => c.meeting_id === m.id)
+    const mExps = exps.filter((e) => e.meeting_id === m.id).reduce((sum, e) => sum + e.amount, 0)
+    const mIncs = incs.filter((i) => i.meeting_id === m.id).reduce((sum, i) => sum + i.amount, 0)
+
     const mLoans = loansList
-      .filter(l => l.disbursed_date === m.meeting_date && ['ACTIVE', 'CLOSED'].includes(l.status))
+      .filter((l) => l.disbursed_date === m.meeting_date && ["ACTIVE", "CLOSED"].includes(l.status))
       .reduce((sum, l) => sum + l.loan_amount, 0)
 
     const totals = calcMeetingTotals({
@@ -185,7 +192,7 @@ export default async function DashboardPage() {
     return {
       ...m,
       total_collected: totals.total_receipts,
-      closing_balance: totals.closing_balance
+      closing_balance: totals.closing_balance,
     }
   })
 

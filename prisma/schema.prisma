@@ -1,0 +1,286 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id                    String    @id @default(uuid()) @db.VarChar(36)
+  name                  String
+  nameMarathi           String?   @default("") @map("name_marathi")
+  village               String
+  taluka                String?   @default("")
+  district              String
+  groupCode             String    @unique @map("group_code") @db.VarChar(10)
+  meetingFrequency      String    @default("MONTHLY") @map("meeting_frequency") @db.VarChar(20)
+  monthlySavingAmount   BigInt    @map("monthly_saving_amount")
+  defaultInterestRate   Decimal   @default(2.00) @map("default_interest_rate") @db.Decimal(5, 2)
+  defaultPenaltyAmount  BigInt    @default(0) @map("default_penalty_amount")
+  maxLoanLimit          BigInt    @default(0) @map("max_loan_limit")
+  maxGuarantorLoans     Int       @default(3) @map("max_guarantor_loans")
+  subscriptionPlan      String    @default("FREE") @map("subscription_plan") @db.VarChar(50)
+  subscriptionStatus    String    @default("ACTIVE") @map("subscription_status") @db.VarChar(50)
+  subscriptionExpiresAt DateTime? @map("subscription_expires_at")
+  trialEndsAt           DateTime? @map("trial_ends_at")
+  maxMembers            Int?      @default(10) @map("max_members")
+  isApproved            Boolean   @default(false) @map("is_approved")
+  isEmailVerified       Boolean   @default(false) @map("is_email_verified")
+  logoUrl               String?   @map("logo_url")
+  createdAt             DateTime  @default(now()) @map("created_at")
+
+  members        Member[]
+  meetings       Meeting[]
+  loans          Loan[]
+  paymentProofs  PaymentProof[]
+  notifications  Notification[]
+  activityLogs   ActivityLog[]
+  subscriptions  Subscription[]
+
+  @@map("organizations")
+}
+
+model Member {
+  id             String    @id @default(uuid()) @db.VarChar(36)
+  organizationId String    @map("organization_id") @db.VarChar(36)
+  userId         String?   @map("user_id") @db.VarChar(36)
+  name           String
+  nameMarathi    String?   @default("") @map("name_marathi")
+  phone          String    @db.VarChar(15)
+  email          String?   @db.VarChar(255)
+  passwordHash   String?   @map("password_hash") @db.VarChar(255)
+  address        String?   @db.Text
+  role           String    @default("MEMBER") @db.VarChar(20)
+  status         String    @default("PENDING") @db.VarChar(20)
+  isActive       Boolean   @default(true) @map("is_active")
+  kycStatus      String    @default("PENDING") @map("kyc_status") @db.VarChar(20)
+  kycNotes       String?   @map("kyc_notes") @db.Text
+  kycVerifiedBy  String?   @map("kyc_verified_by") @db.VarChar(36)
+  kycVerifiedAt  DateTime? @map("kyc_verified_at")
+  memberNumber   Int       @map("member_number")
+  joiningDate    DateTime  @default(now()) @map("joining_date")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  kycVerifier       Member?               @relation("KycVerifier", fields: [kycVerifiedBy], references: [id], onDelete: SetNull)
+  verifiedMembers   Member[]              @relation("KycVerifier")
+  createdMeetings   Meeting[]             @relation("MeetingCreator")
+  contributions     MeetingContribution[]
+  loans             Loan[]                @relation("MemberLoans")
+  requestedLoans    Loan[]                @relation("LoanRequester")
+  approvedLoans     Loan[]                @relation("LoanApprover")
+  guaranteedLoans   Loan[]                @relation("LoanGuarantor")
+  paymentProofs     PaymentProof[]        @relation("MemberPaymentProofs")
+  verifiedProofs    PaymentProof[]        @relation("ProofVerifier")
+  notifications     Notification[]
+  activityLogs      ActivityLog[]
+
+  @@unique([organizationId, phone], name: "unique_phone_per_organization")
+  @@index([organizationId])
+  @@map("members")
+}
+
+model Meeting {
+  id             String   @id @default(uuid()) @db.VarChar(36)
+  organizationId String   @map("organization_id") @db.VarChar(36)
+  meetingDate    DateTime @map("meeting_date") @db.Date
+  monthYear      String   @map("month_year") @db.VarChar(30)
+  status         String   @default("DRAFT") @db.VarChar(20)
+  openingBalance BigInt   @default(0) @map("opening_balance")
+  notes          String?  @db.Text
+  createdBy      String?  @map("created_by") @db.VarChar(36)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization  Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator       Member?               @relation("MeetingCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  contributions MeetingContribution[]
+  expenses      MeetingExpense[]
+  incomes       MeetingIncome[]
+  paymentProofs PaymentProof[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([monthYear])
+  @@map("meetings")
+}
+
+model MeetingContribution {
+  id            String  @id @default(uuid()) @db.VarChar(36)
+  meetingId     String  @map("meeting_id") @db.VarChar(36)
+  memberId      String  @map("member_id") @db.VarChar(36)
+  savingsAmount BigInt  @default(0) @map("savings_amount")
+  loanRepayment BigInt  @default(0) @map("loan_repayment")
+  interestPaid  BigInt  @default(0) @map("interest_paid")
+  penaltyPaid   BigInt  @default(0) @map("penalty_paid")
+  otherAmount   BigInt  @default(0) @map("other_amount")
+  isPresent     Boolean @default(true) @map("is_present")
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  member  Member  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, memberId], name: "unique_contribution_per_member_per_meeting")
+  @@index([meetingId])
+  @@index([memberId])
+  @@map("meeting_contributions")
+}
+
+model MeetingExpense {
+  id          String  @id @default(uuid()) @db.VarChar(36)
+  meetingId   String  @map("meeting_id") @db.VarChar(36)
+  category    String  @default("MISCELLANEOUS") @db.VarChar(50)
+  amount      BigInt
+  description String? @db.Text
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId])
+  @@map("meeting_expenses")
+}
+
+model MeetingIncome {
+  id          String  @id @default(uuid()) @db.VarChar(36)
+  meetingId   String  @map("meeting_id") @db.VarChar(36)
+  category    String  @default("OTHER") @db.VarChar(50)
+  amount      BigInt
+  description String? @db.Text
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId])
+  @@map("meeting_income")
+}
+
+model Loan {
+  id                String    @id @default(uuid()) @db.VarChar(36)
+  organizationId    String    @map("organization_id") @db.VarChar(36)
+  memberId          String    @map("member_id") @db.VarChar(36)
+  loanAmount        BigInt    @map("loan_amount")
+  outstandingAmount BigInt    @map("outstanding_amount")
+  interestRate      Decimal   @default(2.00) @map("interest_rate") @db.Decimal(5, 2)
+  disbursedDate     DateTime  @map("disbursed_date") @db.Date
+  purpose           String?   @db.Text
+  termMonths        Int       @map("term_months")
+  status            String    @default("PENDING") @db.VarChar(20)
+  requestedBy       String?   @map("requested_by") @db.VarChar(36)
+  approvedBy        String?   @map("approved_by") @db.VarChar(36)
+  guarantorId       String?   @map("guarantor_id") @db.VarChar(36)
+  approvedAt        DateTime? @map("approved_at")
+  rejectionReason   String?   @map("rejection_reason") @db.Text
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  member       Member       @relation("MemberLoans", fields: [memberId], references: [id], onDelete: Cascade)
+  requester    Member?      @relation("LoanRequester", fields: [requestedBy], references: [id], onDelete: SetNull)
+  approver     Member?      @relation("LoanApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+  guarantor    Member?      @relation("LoanGuarantor", fields: [guarantorId], references: [id], onDelete: SetNull)
+  emis         LoanEmi[]
+
+  @@index([organizationId])
+  @@index([memberId])
+  @@index([status])
+  @@map("loans")
+}
+
+model LoanEmi {
+  id            String    @id @default(uuid()) @db.VarChar(36)
+  loanId        String    @map("loan_id") @db.VarChar(36)
+  monthYear     String    @map("month_year") @db.VarChar(7)
+  dueDate       DateTime  @map("due_date") @db.Date
+  principalDue  BigInt    @map("principal_due")
+  interestDue   BigInt    @map("interest_due")
+  principalPaid BigInt    @default(0) @map("principal_paid")
+  interestPaid  BigInt    @default(0) @map("interest_paid")
+  fineAmount    BigInt    @default(0) @map("fine_amount")
+  status        String    @default("PENDING") @db.VarChar(20)
+  paidAt        DateTime? @map("paid_at")
+
+  loan Loan @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@index([loanId])
+  @@index([status])
+  @@index([monthYear])
+  @@map("loan_emis")
+}
+
+model PaymentProof {
+  id              String    @id @default(uuid()) @db.VarChar(36)
+  organizationId  String    @map("organization_id") @db.VarChar(36)
+  memberId        String    @map("member_id") @db.VarChar(36)
+  meetingId       String?   @map("meeting_id") @db.VarChar(36)
+  amount          BigInt
+  upiReference    String?   @map("upi_reference")
+  screenshotUrl   String    @map("screenshot_url")
+  status          String    @default("PENDING") @db.VarChar(20)
+  verifiedBy      String?   @map("verified_by") @db.VarChar(36)
+  verifiedAt      DateTime? @map("verified_at")
+  rejectionReason String?   @map("rejection_reason") @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  member       Member       @relation("MemberPaymentProofs", fields: [memberId], references: [id], onDelete: Cascade)
+  meeting      Meeting?     @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  verifier     Member?      @relation("ProofVerifier", fields: [verifiedBy], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([memberId])
+  @@index([status])
+  @@map("payment_proofs")
+}
+
+model Notification {
+  id             String   @id @default(uuid()) @db.VarChar(36)
+  organizationId String   @map("organization_id") @db.VarChar(36)
+  memberId       String   @map("member_id") @db.VarChar(36)
+  title          String
+  message        String   @db.Text
+  type           String   @default("GENERAL") @db.VarChar(30)
+  isRead         Boolean  @default(false) @map("is_read")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  member       Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([memberId])
+  @@map("notifications")
+}
+
+model ActivityLog {
+  id             String   @id @default(uuid()) @db.VarChar(36)
+  organizationId String   @map("organization_id") @db.VarChar(36)
+  performedBy    String?  @map("performed_by") @db.VarChar(36)
+  action         String
+  entityType     String?  @default("") @map("entity_type") @db.VarChar(50)
+  entityId       String?  @map("entity_id") @db.VarChar(36)
+  details        Json
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  performer    Member?      @relation(fields: [performedBy], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([performedBy])
+  @@map("activity_logs")
+}
+
+model Subscription {
+  id                           String    @id @default(uuid()) @db.VarChar(36)
+  organizationId               String    @map("organization_id") @db.VarChar(36)
+  plan                         String    @db.VarChar(50)
+  amount                       BigInt
+  maxMembers                   Int       @map("max_members")
+  status                       String    @default("PENDING") @db.VarChar(50)
+  phonepeTransactionId         String?   @map("phonepe_transaction_id")
+  phonepeMerchantTransactionId String    @unique @map("phonepe_merchant_transaction_id")
+  paymentMethod                String?   @map("payment_method") @db.VarChar(50)
+  startsAt                     DateTime? @map("starts_at")
+  expiresAt                    DateTime? @map("expires_at")
+  createdAt                    DateTime  @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("subscriptions")
+}

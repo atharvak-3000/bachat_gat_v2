@@ -1,90 +1,124 @@
-import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { NextResponse } from "next/server"
+import bcrypt from "bcryptjs"
+import prisma from "@/lib/prisma"
+import { createAuthToken, toSafeMember } from "@/lib/auth"
+import { z } from "zod"
+
+const joinSchema = z.object({
+  orgId: z.string().min(1, "orgId is required"),
+  name: z.string().min(1, "Name is required"),
+  phone: z.string().regex(/^\d{10}$/, "Invalid 10-digit phone number"),
+  password: z.string().min(6, "Password must be at least 6 characters").optional(),
+})
 
 export async function POST(req: Request) {
   try {
-    const { userId, orgId, name, phone } = await req.json()
-    console.log('Join API called with payload:', { userId, orgId, name, phone });
-    const supabase = await createClient()
-    const adminSupabase = createAdminClient()
+    const body = await req.json()
+    const parseResult = joinSchema.safeParse(body)
 
-    if (!userId || !orgId || !phone || !name) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    if (!parseResult.success) {
+      return NextResponse.json({ error: parseResult.error.errors[0].message }, { status: 400 })
     }
 
-    // Double check user session
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user || user.id !== userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const { orgId, name, phone, password } = parseResult.data
 
-    // Check if member exists with this phone (admin pre-added)
-    const { data: existing, error: findError } = await adminSupabase
-      .from('members')
-      .select('id, status, user_id')
-      .eq('organization_id', orgId)
-      .eq('phone', phone)
-      .maybeSingle()
-    
-    if (findError) throw findError
+    const existingMember = await prisma.member.findFirst({
+      where: {
+        organizationId: orgId,
+        phone,
+      },
+    })
 
-    if (existing) {
-      // Phone exists in this org
+    const passwordHash = password ? await bcrypt.hash(password, 10) : null
 
-      // Case 1: Already linked to an auth account (user_id set)
-      // Someone else owns this phone — block them
-      if (existing.user_id && existing.user_id !== userId) {
+    if (existingMember) {
+      if (existingMember.passwordHash && existingMember.isActive) {
         return NextResponse.json(
-          { error: 'This phone number is already registered in this group. Please use a different number.' },
+          { error: "This phone number is already registered in this group. Please use a different number." },
           { status: 409 }
         )
       }
 
-      // Case 2: Admin pre-added this member (no user_id yet)
-      // Link auth account but DO NOT override the name
-      const { error: updateError } = await adminSupabase
-        .from('members')
-        .update({
-          user_id: userId,
-          status: 'PENDING', // still needs admin approval
-          is_active: false,
-          // name intentionally NOT updated — keep admin's name
-        })
-        .eq('id', existing.id)
+      const updatedMember = await prisma.member.update({
+        where: { id: existingMember.id },
+        data: {
+          passwordHash: passwordHash || existingMember.passwordHash,
+          status: "PENDING",
+          isActive: false,
+        },
+      })
 
-      if (updateError) throw updateError
-      return NextResponse.json({ success: true, redirect: '/pending' })
+      const token = await createAuthToken({
+        memberId: updatedMember.id,
+        organizationId: updatedMember.organizationId,
+        role: updatedMember.role,
+      })
+
+      const response = NextResponse.json({
+        success: true,
+        redirect: "/pending",
+        member: toSafeMember(updatedMember),
+      })
+
+      response.cookies.set({
+        name: "bb_token",
+        value: token,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 30 * 24 * 60 * 60,
+      })
+
+      return response
     } else {
-      // New member — get next member number using admin client
-      const { data: maxRow } = await adminSupabase
-        .from('members')
-        .select('member_number')
-        .eq('organization_id', orgId)
-        .order('member_number', { ascending: false })
-        .limit(1)
-      const nextNumber = (maxRow && Array.isArray(maxRow) && maxRow.length > 0) ? (maxRow[0].member_number || 0) + 1 : 1
-      console.log('New member inserted, nextNumber:', nextNumber);
-      
-      const { error: insertError } = await adminSupabase
-        .from('members')
-        .insert({
-          organization_id: orgId,
-          user_id: userId,
-          name: name,
-          phone: phone,
-          role: 'MEMBER',
-          status: 'PENDING',
-          is_active: false,
-          member_number: nextNumber,
-          joining_date: new Date().toISOString().split('T')[0]
-        })
-      
-      if (insertError) throw insertError
-      return NextResponse.json({ success: true, redirect: '/pending' })
+      const maxRow = await prisma.member.findFirst({
+        where: { organizationId: orgId },
+        orderBy: { memberNumber: "desc" },
+      })
+
+      const nextNumber = (maxRow?.memberNumber || 0) + 1
+
+      const newMember = await prisma.member.create({
+        data: {
+          organizationId: orgId,
+          name,
+          phone,
+          passwordHash,
+          role: "MEMBER",
+          status: "PENDING",
+          isActive: false,
+          memberNumber: nextNumber,
+          joiningDate: new Date(),
+        },
+      })
+
+      const token = await createAuthToken({
+        memberId: newMember.id,
+        organizationId: newMember.organizationId,
+        role: newMember.role,
+      })
+
+      const response = NextResponse.json({
+        success: true,
+        redirect: "/pending",
+        member: toSafeMember(newMember),
+      })
+
+      response.cookies.set({
+        name: "bb_token",
+        value: token,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 30 * 24 * 60 * 60,
+      })
+
+      return response
     }
   } catch (error: any) {
-    console.error('Join API error:', error)
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 })
+    console.error("Join API error:", error)
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 })
   }
 }

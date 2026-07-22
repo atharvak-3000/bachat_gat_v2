@@ -2,29 +2,35 @@ import { redirect } from "next/navigation"
 
 export function checkSubscriptionAccess(org?: {
   subscription_status?: string | null
-  subscription_expires_at?: string | null
-  trial_ends_at?: string | null
+  subscriptionStatus?: string | null
+  subscription_expires_at?: string | Date | null
+  subscriptionExpiresAt?: string | Date | null
+  trial_ends_at?: string | Date | null
+  trialEndsAt?: string | Date | null
 }) {
   if (!org) {
     redirect("/onboarding")
   }
 
+  const status = org.subscription_status || org.subscriptionStatus
+  const trialEnds = org.trial_ends_at || org.trialEndsAt
+  const expiresAt = org.subscription_expires_at || org.subscriptionExpiresAt
   const now = new Date()
 
   // 1. If trial is active
   if (
-    org.subscription_status === "TRIAL" && 
-    org.trial_ends_at && 
-    new Date(org.trial_ends_at) > now
+    status === "TRIAL" &&
+    trialEnds &&
+    new Date(trialEnds) > now
   ) {
     return true
   }
 
   // 2. If subscription is active
   if (
-    org.subscription_status === "ACTIVE" && 
-    org.subscription_expires_at && 
-    new Date(org.subscription_expires_at) > now
+    status === "ACTIVE" &&
+    expiresAt &&
+    new Date(expiresAt) > now
   ) {
     return true
   }
@@ -35,21 +41,28 @@ export function checkSubscriptionAccess(org?: {
 
 export function checkOnboardingGuard(org?: {
   subscription_status?: string | null
-  subscription_expires_at?: string | null
-  trial_ends_at?: string | null
+  subscriptionStatus?: string | null
+  subscription_expires_at?: string | Date | null
+  subscriptionExpiresAt?: string | Date | null
+  trial_ends_at?: string | Date | null
+  trialEndsAt?: string | Date | null
 }) {
   if (!org) return // allow to stay to create organisation
 
+  const status = org.subscription_status || org.subscriptionStatus
+  const trialEnds = org.trial_ends_at || org.trialEndsAt
+  const expiresAt = org.subscription_expires_at || org.subscriptionExpiresAt
   const now = new Date()
-  const hasActiveTrial = 
-    org.subscription_status === "TRIAL" && 
-    org.trial_ends_at && 
-    new Date(org.trial_ends_at) > now
 
-  const hasActiveSub = 
-    org.subscription_status === "ACTIVE" && 
-    org.subscription_expires_at && 
-    new Date(org.subscription_expires_at) > now
+  const hasActiveTrial =
+    status === "TRIAL" &&
+    trialEnds &&
+    new Date(trialEnds) > now
+
+  const hasActiveSub =
+    status === "ACTIVE" &&
+    expiresAt &&
+    new Date(expiresAt) > now
 
   if (hasActiveTrial || hasActiveSub) {
     redirect("/dashboard")
