@@ -61,6 +61,8 @@ model Member {
   kycVerifiedAt  DateTime? @map("kyc_verified_at")
   memberNumber   Int       @map("member_number")
   joiningDate    DateTime  @default(now()) @map("joining_date")
+  resetToken          String?   @map("reset_token") @db.VarChar(255)
+  resetTokenExpiresAt DateTime? @map("reset_token_expires_at")
   createdAt      DateTime  @default(now()) @map("created_at")
 
   organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)

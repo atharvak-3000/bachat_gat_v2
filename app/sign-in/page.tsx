@@ -379,6 +379,14 @@ export default function SignInPage() {
                 <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
                   {t.password}
                 </label>
+                {!isMember && (
+                  <a
+                    href="/forgot-password"
+                    className="text-xs text-[#E85D26] hover:underline font-semibold"
+                  >
+                    {lang === 'mr' ? 'पासवर्ड विसरलात?' : 'Forgot password?'}
+                  </a>
+                )}
               </div>
               <input
                 type="password"

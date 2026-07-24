@@ -50,3 +50,4 @@ next-env.d.ts
 test-by-code.js
 check-db.js
 reset-db.js
+*.sql

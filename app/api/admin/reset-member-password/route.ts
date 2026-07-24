@@ -32,7 +32,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Member not found" }, { status: 404 })
     }
 
-    if (targetMember.organizationId !== member.organization_id) {
+    const callerOrgId = member.organization_id || member.organizationId
+    if (member.role !== "SUPERADMIN" && targetMember.organizationId !== callerOrgId) {
       return forbidden()
     }
 
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
         data: { passwordHash },
       })
 
-      await logActivity(tx, member.id, member.organization_id, "RESET_MEMBER_PASSWORD", "member", targetMember.id, {
+      await logActivity(tx, member.id, targetMember.organizationId, "RESET_MEMBER_PASSWORD", "member", targetMember.id, {
         reset_by_role: member.role,
         member_name: targetMember.name,
       })

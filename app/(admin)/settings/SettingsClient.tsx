@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import type { Organization, Member } from "@/types"
 import { useRouter } from "next/navigation"
+import ChangeOwnPasswordModal from "@/components/ChangeOwnPasswordModal"
 
 export default function SettingsClient({ 
   organization, 
@@ -37,6 +38,7 @@ export default function SettingsClient({
     organization.logo_url || ''
   )
   const [logoUploading, setLogoUploading] = useState(false)
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false)
 
   const [lang, setLang] = useState<'mr'|'en'>('mr')
 
@@ -617,6 +619,38 @@ export default function SettingsClient({
           </div>
         </div>
       </div>
+
+      {/* CARD 5: Security / Change Password */}
+      <div className="bg-white dark:bg-[#1A1D27] rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 flex justify-between items-center">
+          <h2 className="font-semibold text-[#1B2B6B] dark:text-white">
+            {lang === 'mr' ? "सुरक्षा आणि पासवर्ड" : "Security & Password"}
+          </h2>
+        </div>
+        <div className="p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <p className="font-bold text-gray-800 dark:text-white text-base">
+              {lang === 'mr' ? "माझा पासवर्ड बदला" : "Change My Password"}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {lang === 'mr' 
+                ? "तुमचा सध्याचा पासवर्ड वापरून तुमच्या खात्याचा पासवर्ड सुरक्षितपणे अद्यतनित करा." 
+                : "Update your account password securely using your current password."}
+            </p>
+          </div>
+          <button
+            onClick={() => setIsChangePasswordModalOpen(true)}
+            className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition active:scale-95 shadow-sm"
+          >
+            {lang === 'mr' ? "पासवर्ड बदला" : "Change Password"}
+          </button>
+        </div>
+      </div>
+
+      <ChangeOwnPasswordModal 
+        isOpen={isChangePasswordModalOpen} 
+        onClose={() => setIsChangePasswordModalOpen(false)} 
+      />
     </div>
   )
 }

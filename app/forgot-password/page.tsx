@@ -7,7 +7,7 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
+  const [success, setSuccess] = useState<string | null>(null)
 
   const [lang, setLang] = useState<"mr" | "en">("mr")
 
@@ -23,21 +23,19 @@ export default function ForgotPasswordPage() {
   const T = {
     mr: {
       title: "पासवर्ड विसरलात?",
-      sub: "कृपया तुमच्या बचत गटाच्या अध्यक्षांशी संपर्क साधा किंवा खाली तुमचा ईमेल टाका.",
+      sub: "तुमचा नोंदणीकृत ईमेल प्रविष्ट करा. आम्ही पासवर्ड रिसेट करण्यासाठी लिंक पाठवू.",
       emailLabel: "ईमेल पत्ता",
-      submitBtn: "पासवर्ड रीसेट करा",
-      submitting: "प्रक्रिया करत आहे...",
-      successMsg: "कृपया तुमच्या बचत गटाच्या अध्यक्षांशी संपर्क साधून तुमचा पासवर्ड रिसेट करून घ्या.",
+      submitBtn: "रिसेट लिंक पाठवा",
+      submitting: "ईमेल पाठवत आहे...",
       backToSignIn: "← लॉगिनवर परत जा",
       platform: "बचत गट ऑनलाइन",
     },
     en: {
       title: "Forgot Password?",
-      sub: "Please contact your Bachat Gat superadmin or enter your email below.",
+      sub: "Enter your registered email address and we'll send you a password reset link.",
       emailLabel: "Email Address",
-      submitBtn: "Reset Password",
-      submitting: "Processing...",
-      successMsg: "Please contact your Bachat Gat superadmin to reset your password.",
+      submitBtn: "Send Reset Link",
+      submitting: "Sending Email...",
       backToSignIn: "← Back to Login",
       platform: "Bachatgat Online",
     },
@@ -48,12 +46,24 @@ export default function ForgotPasswordPage() {
     e.preventDefault()
     setLoading(true)
     setError(null)
-    setSuccess(false)
+    setSuccess(null)
 
     try {
-      setSuccess(true)
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to process password reset request")
+      }
+
+      setSuccess(data.message || "If an account with that email exists, password reset instructions have been sent.")
     } catch (err: any) {
-      setError("Network error. Please try again.")
+      setError(err.message || "Network error. Please try again.")
     } finally {
       setLoading(false)
     }
@@ -84,8 +94,13 @@ export default function ForgotPasswordPage() {
           </div>
 
           {success ? (
-            <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/30 rounded-2xl p-5 text-sm text-green-800 dark:text-green-400 font-medium leading-relaxed animate-fadeIn">
-              ℹ️ {t.successMsg}
+            <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/30 rounded-2xl p-5 text-sm text-green-800 dark:text-green-400 font-medium leading-relaxed animate-fadeIn space-y-4">
+              <p>📧 {success}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {lang === "mr"
+                  ? "ईमेल तपासल्यानंतर लिंकवर क्लिक करा. ईमेल न मिळाल्यास स्पॅम फोल्डर तपासा."
+                  : "Check your inbox and click the reset link. If not found, check your spam folder."}
+              </p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -98,7 +113,7 @@ export default function ForgotPasswordPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@example.com"
+                  placeholder="admin@example.com"
                   className="w-full border border-gray-300 dark:border-gray-800 bg-white dark:bg-gray-950 text-gray-900 dark:text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition"
                 />
               </div>
