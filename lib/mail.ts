@@ -1,12 +1,22 @@
 import nodemailer from 'nodemailer'
 
+const smtpHost = process.env.SMTP_HOST || 'smtp.hostinger.com'
+const smtpPort = Number(process.env.SMTP_PORT) || 465
+const smtpSecure = process.env.SMTP_SECURE !== undefined ? process.env.SMTP_SECURE === 'true' : true
+const smtpUser = process.env.SMTP_USER || 'support@webizsquare.com'
+const smtpPass = process.env.SMTP_PASSWORD || ''
+
 const transporter = nodemailer.createTransport({
-  host: 'smtp.hostinger.com',
-  port: 465,
-  secure: true,
+  host: smtpHost,
+  port: smtpPort,
+  secure: smtpSecure,
   auth: {
-    user: 'support@webizsquare.com',
-    pass: process.env.SMTP_PASSWORD || '',
+    user: smtpUser,
+    pass: smtpPass,
+  },
+  tls: {
+    servername: smtpHost,
+    rejectUnauthorized: false,
   },
 })
 
@@ -14,8 +24,10 @@ export async function sendPasswordResetEmail(toEmail: string, token: string, bas
   const domain = baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'https://bachatgat.webizsquare.com'
   const resetUrl = `${domain}/reset-password?token=${token}`
 
+  const fromSender = process.env.SMTP_FROM || `"Bachatgat Online Support" <${smtpUser}>`
+
   const mailOptions = {
-    from: '"Bachatgat Online Support" <support@webizsquare.com>',
+    from: fromSender,
     to: toEmail,
     subject: 'बचत गट पासवर्ड रिसेट लिंक / Password Reset Link - Bachatgat Online',
     html: `

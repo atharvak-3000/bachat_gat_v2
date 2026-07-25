@@ -39,6 +39,8 @@ export default function MemberDetailClient({
   const [modalLoading, setModalLoading] = useState(false)
   const [modalError, setModalError] = useState<string | null>(null)
   const [modalSuccess, setModalSuccess] = useState(false)
+  const [tempPasswordResult, setTempPasswordResult] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -78,14 +80,19 @@ export default function MemberDetailClient({
       resetPwdBtn: "पासवर्ड रिसेट करा",
       resetPwdTitle: "पासवर्ड रिसेट करा",
       resetPwdSub: "चा नवीन पासवर्ड सेट करा",
-      newPasswordLabel: "नवीन पासवर्ड",
+      newPasswordLabel: "नवीन पासवर्ड (पर्यायी)",
       confirmPasswordLabel: "पासवर्डची खात्री करा",
       saveBtn: "पासवर्ड जतन करा",
+      autoGenBtn: "⚡ ऑटो-जनरेट करा",
       savingBtn: "जतन करत आहे...",
       mismatchError: "पासवर्ड जुळत नाहीत!",
       lengthError: "पासवर्ड किमान ८ अक्षरांचा असावा!",
       requiredError: "सर्व फील्ड भरणे आवश्यक आहे!",
       successResetMsg: "🎉 पासवर्ड यशस्वीरित्या बदलला आहे!",
+      tempPwdNotice: "हा तात्पुरता पासवर्ड सदस्याला नोंदवून द्या (हा पुन्हा दाखवला जाणार नाही).",
+      copyPwd: "पासवर्ड कॉपी करा",
+      copiedPwd: "✓ कॉपी केले!",
+      doneBtn: "पूर्ण झाले",
       cancel: "रद्द करा",
       guarantorFor: "जामीनदार आहे",
       overdueGuarantorWarning: "⚠️ हा सदस्य {count} थकीत कर्जाचा जामीनदार आहे",
@@ -115,14 +122,19 @@ export default function MemberDetailClient({
       resetPwdBtn: "Reset Password",
       resetPwdTitle: "Reset Password",
       resetPwdSub: "Set a new password for",
-      newPasswordLabel: "New Password",
+      newPasswordLabel: "New Password (Optional)",
       confirmPasswordLabel: "Confirm Password",
       saveBtn: "Save Password",
+      autoGenBtn: "⚡ Auto-Generate",
       savingBtn: "Saving password...",
       mismatchError: "Passwords do not match!",
       lengthError: "Password must be at least 8 characters long!",
       requiredError: "All fields are required!",
       successResetMsg: "🎉 Password successfully updated!",
+      tempPwdNotice: "Relay this temporary password to the member directly (it will not be shown again).",
+      copyPwd: "Copy Password",
+      copiedPwd: "✓ Copied!",
+      doneBtn: "Done",
       cancel: "Cancel",
       guarantorFor: "Guarantor For",
       overdueGuarantorWarning: "⚠️ This member is guarantor for {count} overdue loan(s)",
@@ -141,36 +153,23 @@ export default function MemberDetailClient({
     currentUserRole === 'SUPERADMIN' || 
     (currentUserRole === 'ADMIN' && member.role === 'MEMBER');
 
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const executeReset = async (passwordPayload?: string) => {
     setModalError(null)
     setModalSuccess(false)
-
-    if (!newPassword || !confirmPassword) {
-      setModalError(t.requiredError)
-      return
-    }
-
-    if (newPassword.length < 8) {
-      setModalError(t.lengthError)
-      return
-    }
-
-    if (newPassword !== confirmPassword) {
-      setModalError(t.mismatchError)
-      return
-    }
-
+    setTempPasswordResult(null)
+    setCopied(false)
     setModalLoading(true)
 
     try {
+      const body: Record<string, string> = { memberId: member.id }
+      if (passwordPayload) {
+        body.newPassword = passwordPayload
+      }
+
       const res = await fetch("/api/admin/reset-member-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          memberId: member.id,
-          newPassword
-        })
+        body: JSON.stringify(body)
       })
 
       const data = await res.json()
@@ -178,21 +177,56 @@ export default function MemberDetailClient({
         throw new Error(data.error || "Failed to reset password")
       }
 
+      setTempPasswordResult(data.temporaryPassword)
       setModalSuccess(true)
       setNewPassword("")
       setConfirmPassword("")
-      
-      setTimeout(() => {
-        setIsModalOpen(false)
-        setModalSuccess(false)
-      }, 2000)
-
     } catch (err: any) {
       console.error("[Reset Password Modal Error]:", err)
       setModalError(err.message || "An unexpected error occurred.")
     } finally {
       setModalLoading(false)
     }
+  }
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (newPassword || confirmPassword) {
+      if (newPassword.length < 8) {
+        setModalError(t.lengthError)
+        return
+      }
+      if (newPassword !== confirmPassword) {
+        setModalError(t.mismatchError)
+        return
+      }
+      await executeReset(newPassword)
+    } else {
+      await executeReset()
+    }
+  }
+
+  const handleAutoGenerate = async () => {
+    await executeReset()
+  }
+
+  const handleCopyPassword = () => {
+    if (tempPasswordResult) {
+      navigator.clipboard.writeText(tempPasswordResult)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false)
+    setNewPassword("")
+    setConfirmPassword("")
+    setModalError(null)
+    setModalSuccess(false)
+    setTempPasswordResult(null)
+    setCopied(false)
   }
 
   return (
@@ -326,7 +360,7 @@ export default function MemberDetailClient({
       {/* Reset Password Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-gray-150 p-6 md:p-8 max-w-md w-full space-y-6 shadow-2xl animate-scaleIn select-none">
+          <div className="bg-white rounded-3xl border border-gray-150 p-6 md:p-8 max-w-md w-full space-y-6 shadow-2xl animate-scaleIn">
             
             <div className="space-y-1">
               <h3 className="text-xl font-black text-gray-900 leading-tight">
@@ -338,11 +372,54 @@ export default function MemberDetailClient({
             </div>
 
             {modalSuccess ? (
-              <div className="bg-green-50 border border-green-200 text-green-800 p-5 rounded-2xl text-sm font-bold leading-relaxed animate-fadeIn">
-                {t.successResetMsg}
+              <div className="space-y-4 animate-fadeIn">
+                <div className="bg-green-50 border border-green-200 text-green-800 p-4 rounded-2xl text-xs font-bold leading-relaxed">
+                  {t.successResetMsg}
+                </div>
+
+                {tempPasswordResult && (
+                  <div className="bg-orange-50 border border-orange-200 p-4 rounded-2xl space-y-2 text-center">
+                    <p className="text-[11px] font-bold text-orange-700 uppercase tracking-wider">
+                      तात्पुरता पासवर्ड / Temporary Password
+                    </p>
+                    <div className="bg-white border border-orange-300 rounded-xl py-3 px-4 text-center font-mono text-lg font-black text-gray-900 tracking-wider select-all shadow-inner">
+                      {tempPasswordResult}
+                    </div>
+                    <p className="text-[11px] text-gray-600 font-medium">
+                      ⚠️ {t.tempPwdNotice}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleCopyPassword}
+                      className="w-full mt-2 bg-orange-600 hover:bg-orange-700 text-white font-extrabold py-2 px-4 rounded-xl text-xs transition shadow-sm active:scale-95"
+                    >
+                      {copied ? t.copiedPwd : t.copyPwd}
+                    </button>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  className="w-full bg-gray-900 hover:bg-gray-800 text-white font-extrabold py-3 rounded-xl text-xs transition active:scale-95"
+                >
+                  {t.doneBtn}
+                </button>
               </div>
             ) : (
               <form onSubmit={handleResetPassword} className="space-y-4">
+                {/* Auto generate button */}
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    disabled={modalLoading}
+                    onClick={handleAutoGenerate}
+                    className="text-xs bg-amber-100 hover:bg-amber-200 text-amber-900 font-extrabold px-3 py-1.5 rounded-lg transition active:scale-95 disabled:opacity-50"
+                  >
+                    {t.autoGenBtn}
+                  </button>
+                </div>
+
                 {/* Field 1: New Password */}
                 <div>
                   <label className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-1.5">
@@ -351,7 +428,6 @@ export default function MemberDetailClient({
                   <div className="relative">
                     <input
                       type={showNewPassword ? "text" : "password"}
-                      required
                       value={newPassword}
                       onChange={e => setNewPassword(e.target.value)}
                       placeholder="••••••••"
@@ -375,7 +451,6 @@ export default function MemberDetailClient({
                   <div className="relative">
                     <input
                       type={showConfirmPassword ? "text" : "password"}
-                      required
                       value={confirmPassword}
                       onChange={e => setConfirmPassword(e.target.value)}
                       placeholder="••••••••"
@@ -410,12 +485,7 @@ export default function MemberDetailClient({
                   <button
                     type="button"
                     disabled={modalLoading}
-                    onClick={() => {
-                      setIsModalOpen(false)
-                      setNewPassword("")
-                      setConfirmPassword("")
-                      setModalError(null)
-                    }}
+                    onClick={handleCloseModal}
                     className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-extrabold p-3 rounded-xl text-center text-xs transition"
                   >
                     {t.cancel}
@@ -427,6 +497,7 @@ export default function MemberDetailClient({
           </div>
         </div>
       )}
+
       {/* Guaranteed Loans Check List */}
       {guaranteedLoans.length > 0 && (
         <div className="bg-white border border-gray-100 rounded-3xl shadow-sm overflow-hidden">

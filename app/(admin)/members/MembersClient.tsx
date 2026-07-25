@@ -112,9 +112,11 @@ export default function MembersClient({ members, currentMember, inviteLink }: Pr
                   <td className="px-6 py-4 text-gray-400 font-mono text-xs">{m.member_number}</td>
                   <td className="px-6 py-4">
                     <div>
-                      <p className="font-semibold text-gray-800">{m.name}</p>
+                      <a href={`/members/${m.id}`} className="font-semibold text-[#1B2B6B] hover:text-[#E85D26] hover:underline transition">
+                        {m.name}
+                      </a>
                       {m.name_marathi && <p className="text-xs text-gray-400">{m.name_marathi}</p>}
-                      {isSelf && <span className="text-xs text-[#E85D26] font-medium">तुम्ही</span>}
+                      {isSelf && <span className="text-xs text-[#E85D26] font-medium ml-1"> (तुम्ही)</span>}
                     </div>
                   </td>
                   <td className="px-6 py-4 text-gray-600">{m.phone}</td>

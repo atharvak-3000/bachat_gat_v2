@@ -1,5 +1,7 @@
 import prisma from "@/lib/prisma"
 
+export const dynamic = "force-dynamic"
+
 export default async function PlatformDashboardPage() {
   const [orgs, totalMembers] = await Promise.all([
     prisma.organization.findMany(),

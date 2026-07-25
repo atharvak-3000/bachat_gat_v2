@@ -1,6 +1,8 @@
 import prisma from "@/lib/prisma"
 import GatsClient from "./GatsClient"
 
+export const dynamic = "force-dynamic"
+
 export default async function PlatformGatsPage() {
   const orgs = await prisma.organization.findMany({
     include: {
