@@ -32,7 +32,7 @@ export default async function MemberPassbookPage() {
     }),
   ])
 
-  const memberContribs = contribs.map((c) => ({
+  const memberContribs = contribs.map((c: any) => ({
     ...c,
     meeting_id: c.meetingId,
     member_id: c.memberId,
@@ -52,7 +52,7 @@ export default async function MemberPassbookPage() {
     },
   })) as unknown as (MeetingContribution & { meeting: Meeting })[]
 
-  const myLoans = loans.map((l) => ({
+  const myLoans = loans.map((l: any) => ({
     ...l,
     organization_id: l.organizationId,
     member_id: l.memberId,

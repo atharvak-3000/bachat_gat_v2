@@ -23,7 +23,7 @@ export async function GET(request: Request) {
       orderBy: { createdAt: "desc" },
     })
 
-    const safeProofs = proofs.map((p) => ({
+    const safeProofs = proofs.map((p: any) => ({
       ...p,
       member: toSafeMember(p.member),
     }))
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
 
     const { amount, upi_reference, meeting_id, screenshot_url } = parseResult.data
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       await tx.paymentProof.create({
         data: {
           organizationId: member.organizationId,
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
 
       if (admins.length > 0) {
         await tx.notification.createMany({
-          data: admins.map((admin) => ({
+          data: admins.map((admin: any) => ({
             organizationId: member.organizationId,
             memberId: admin.id,
             title: "New Payment Proof",

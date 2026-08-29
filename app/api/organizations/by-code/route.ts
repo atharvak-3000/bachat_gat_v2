@@ -39,7 +39,7 @@ export async function GET(req: Request) {
         },
       })
 
-      const matched = allOrgs.find((o) => normalize(o.groupCode) === normalizedTarget)
+      const matched = allOrgs.find((o: any) => normalize(o.groupCode) === normalizedTarget)
       if (matched) org = matched
     }
 

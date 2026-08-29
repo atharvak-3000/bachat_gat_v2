@@ -44,7 +44,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 
     const oldRole = target.role
 
-    const updated = await prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx: any) => {
       const res = await tx.member.update({
         where: { id },
         data: { role: newRole },

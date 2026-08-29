@@ -27,7 +27,7 @@ export async function POST(
       return NextResponse.json({ error: "Loan is not in PENDING status" }, { status: 400 })
     }
 
-    const updatedLoan = await prisma.$transaction(async (tx) => {
+    const updatedLoan = await prisma.$transaction(async (tx: any) => {
       const res = await tx.loan.update({
         where: { id },
         data: {

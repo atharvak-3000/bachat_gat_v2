@@ -52,7 +52,7 @@ export default async function AdminLoanDetailsPage({
     guarantor: loan.guarantor,
   }
 
-  const safeEmis = emis.map((e) => ({
+  const safeEmis = emis.map((e: any) => ({
     ...e,
     loan_id: e.loanId,
     month_year: e.monthYear,

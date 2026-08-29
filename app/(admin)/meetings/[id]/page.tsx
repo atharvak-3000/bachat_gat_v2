@@ -21,13 +21,24 @@ import type {
   Member
 } from "@/types"
 
+function formatDateString(dateVal?: string | Date | null, lang: 'mr' | 'en' = 'en'): string {
+  if (!dateVal) return '—'
+  const d = new Date(dateVal)
+  if (isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString(lang === 'mr' ? 'mr-IN' : 'en-IN', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric'
+  })
+}
+
 export default function MeetingDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const { id } = use(params)
 
   // Data states
-  const [meeting, setMeeting] = useState<Meeting | null>(null)
-  const [contribs, setContribs] = useState<Record<string, MeetingContribution & { member: Member }>>({})
+  const [meeting, setMeeting] = useState<any | null>(null)
+  const [contribs, setContribs] = useState<Record<string, any>>({})
   const [expenses, setExpenses] = useState<MeetingExpense[]>([])
   const [incomes, setIncomes] = useState<MeetingIncome[]>([])
   const [issuedLoans, setIssuedLoans] = useState<LoanWithMember[]>([])
@@ -47,7 +58,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
     new Date().toISOString().split('T')[0]
   )
 
-  // Cell-level saving indicators: Record<`${memberId}-${field}`, 'saving' | 'saved' | 'idle'>
+  // Cell-level saving indicators
   const [cellStatus, setCellStatus] = useState<Record<string, 'saving' | 'saved' | 'idle'>>({})
   const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({})
 
@@ -249,19 +260,20 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
       const data = await res.json()
       
       setMeeting(data.meeting)
-      setMeetingNotes(data.meeting.notes || "")
-      setExpenses(data.expenses)
-      setIncomes(data.income)
-      setIssuedLoans(data.loans_issued)
-      setActiveLoans(data.active_loans)
+      setMeetingNotes(data.meeting?.notes || "")
+      setExpenses(data.expenses || [])
+      setIncomes(data.income || [])
+      setIssuedLoans(data.loans_issued || [])
+      setActiveLoans(data.active_loans || [])
       setOrgSettings(data.org_settings)
 
       // Map contributions to Record<member_id, contribution>
-      const contribMap: Record<string, MeetingContribution & { member: Member }> = {}
+      const contribMap: Record<string, any> = {}
       const memberList: Member[] = []
       
-      data.contributions.forEach((c: MeetingContribution & { member: Member }) => {
-        contribMap[c.member_id] = c
+      ;(data.contributions || []).forEach((c: any) => {
+        const mId = c.member_id || c.memberId
+        contribMap[mId] = c
         if (c.member) memberList.push(c.member)
       })
       
@@ -298,10 +310,12 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
         <div className="flex flex-col items-center gap-3">
           <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-500 font-medium">{lang === 'mr' ? 'सभेचा तपशील लोड होत आहे...' : 'Loading meeting details...'}</p>
+          <p className="text-gray-500 dark:text-gray-400 font-medium">
+            {lang === 'mr' ? 'सभेचा तपशील लोड होत आहे...' : 'Loading meeting details...'}
+          </p>
         </div>
       </div>
     )
@@ -309,15 +323,15 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
 
   if (error || !meeting) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6 bg-gray-50">
-        <div className="bg-white border border-gray-100 rounded-3xl p-8 max-w-md text-center shadow-lg">
-          <div className="w-12 h-12 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+      <div className="min-h-screen flex items-center justify-center p-6 bg-gray-50 dark:bg-gray-950">
+        <div className="bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-3xl p-8 max-w-md text-center shadow-lg">
+          <div className="w-12 h-12 bg-red-50 dark:bg-red-950/30 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
             </svg>
           </div>
-          <h3 className="text-lg font-bold text-gray-900">{t.errorText}</h3>
-          <p className="text-gray-500 mt-2 text-sm">{error || t.meetingNotFound}</p>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t.errorText}</h3>
+          <p className="text-gray-500 dark:text-gray-400 mt-2 text-sm">{error || t.meetingNotFound}</p>
           <Link href="/meetings" className="mt-6 inline-flex bg-orange-500 text-white font-semibold px-4 py-2 rounded-xl text-sm">
             {t.backBtn}
           </Link>
@@ -327,34 +341,37 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const isFinalized = meeting.status === 'FINALIZED'
+  const meetingDateValue = meeting.meeting_date || meeting.meetingDate
+  const openingBalanceValue = Number(meeting.opening_balance ?? meeting.openingBalance ?? 0)
+  const monthYearValue = meeting.month_year || meeting.monthYear
+  const closingDateValue = meeting.closing_date || meeting.closingDate
 
   // Computed values
   const contributionsList = Object.values(contribs)
-  const sumSavings = contributionsList.reduce((sum, c) => sum + (c.savings_amount || 0), 0)
-  const sumPenalties = contributionsList.reduce((sum, c) => sum + (c.penalty_paid || 0), 0)
-  const sumRepayments = contributionsList.reduce((sum, c) => sum + (c.loan_repayment || 0), 0)
-  const sumInterest = contributionsList.reduce((sum, c) => sum + (c.interest_paid || 0), 0)
-  const sumOtherContributions = contributionsList.reduce((sum, c) => sum + (c.other_amount || 0), 0)
+  const sumSavings = contributionsList.reduce((sum, c: any) => sum + Number(c.savings_amount ?? c.savingsAmount ?? 0), 0)
+  const sumPenalties = contributionsList.reduce((sum, c: any) => sum + Number(c.penalty_paid ?? c.penaltyPaid ?? 0), 0)
+  const sumRepayments = contributionsList.reduce((sum, c: any) => sum + Number(c.loan_repayment ?? c.loanRepayment ?? 0), 0)
+  const sumInterest = contributionsList.reduce((sum, c: any) => sum + Number(c.interest_paid ?? c.interestPaid ?? 0), 0)
+  const sumOtherContributions = contributionsList.reduce((sum, c: any) => sum + Number(c.other_amount ?? c.otherAmount ?? 0), 0)
 
-  const sumExpenses = expenses.reduce((sum, e) => sum + e.amount, 0)
-  const sumIncomes = incomes.reduce((sum, i) => sum + i.amount, 0)
+  const sumExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
+  const sumIncomes = incomes.reduce((sum, i) => sum + Number(i.amount || 0), 0)
 
-  // Active issued loans sum (deducts cash)
+  // Active issued loans sum
   const activeIssuedLoans = issuedLoans.filter(l => ['ACTIVE', 'CLOSED'].includes(l.status))
-  const sumLoansIssued = activeIssuedLoans.reduce((sum, l) => sum + l.loan_amount, 0)
+  const sumLoansIssued = activeIssuedLoans.reduce((sum, l: any) => sum + Number(l.loan_amount ?? l.loanAmount ?? 0), 0)
 
   const totalReceipts = sumSavings + sumPenalties + sumRepayments + sumInterest + sumOtherContributions + sumIncomes
   const totalExpenses = sumLoansIssued + sumExpenses
-  const closingBalance = meeting.opening_balance + totalReceipts - totalExpenses
+  const closingBalance = openingBalanceValue + totalReceipts - totalExpenses
 
   const totalMembers = contributionsList.length
-  const presentMembers = contributionsList.filter(c => c.is_present).length
+  const presentMembers = contributionsList.filter((c: any) => c.is_present ?? c.isPresent).length
 
   // Helper to trigger saving API call
   const triggerSaveContribution = (memberId: string, updatedFields: Partial<MeetingContribution>) => {
     const key = `${memberId}-${Object.keys(updatedFields)[0]}`
     
-    // Clear existing timer for this key
     if (debounceTimers.current[key]) {
       clearTimeout(debounceTimers.current[key])
     }
@@ -379,11 +396,11 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
         console.error(err)
         setCellStatus(prev => ({ ...prev, [key]: 'idle' }))
       }
-    }, 400) // 400ms debounce
+    }, 400)
   }
 
   // Handle cell value change
-  const handleCellChange = (memberId: string, field: keyof MeetingContribution, paiseValue: number) => {
+  const handleCellChange = (memberId: string, field: string, paiseValue: number) => {
     if (isFinalized) return
 
     setContribs(prev => {
@@ -398,27 +415,27 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
       }
     })
 
-    triggerSaveContribution(memberId, { [field]: paiseValue })
+    triggerSaveContribution(memberId, { [field]: paiseValue } as any)
   }
 
   // Handle presence checkbox toggle
   const handlePresenceToggle = (memberId: string, isPresent: boolean) => {
     if (isFinalized) return
 
-    const updates: Partial<MeetingContribution> = { is_present: isPresent }
+    const defaultPenalty = Number(orgSettings?.default_penalty_amount ?? (orgSettings as any)?.defaultPenaltyAmount ?? 0)
+    const defaultSavings = Number(orgSettings?.monthly_saving_amount ?? (orgSettings as any)?.monthlySavingAmount ?? 0)
+
+    const updates: Record<string, any> = { is_present: isPresent }
     
     if (!isPresent) {
-      // Auto penalty & clear other fields
-      const penalty = orgSettings?.default_penalty_amount || 0
-      updates.penalty_paid = penalty
+      updates.penalty_paid = defaultPenalty
       updates.savings_amount = 0
       updates.loan_repayment = 0
       updates.interest_paid = 0
       updates.other_amount = 0
     } else {
-      // Re-enable and reset penalty
       updates.penalty_paid = 0
-      updates.savings_amount = orgSettings?.monthly_saving_amount || 0
+      updates.savings_amount = defaultSavings
     }
 
     setContribs(prev => {
@@ -433,9 +450,8 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
       }
     })
 
-    // Debounce save for all updated fields
     Object.entries(updates).forEach(([field, val]) => {
-      triggerSaveContribution(memberId, { [field]: val })
+      triggerSaveContribution(memberId, { [field]: val } as any)
     })
   }
 
@@ -564,8 +580,6 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
       const newLoan = await res.json()
       setIssuedLoans(prev => [...prev, newLoan])
       setLoanForm({ member_id: "", amount: "", interest_rate: "2.0", term_months: "12", purpose: "", guarantor_id: "" })
-      
-      // Refresh active loans to update outstanding hints
       fetchDetails()
     } catch (err: any) {
       alert(err.message)
@@ -574,9 +588,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
 
   // Cancel Loan
   const handleCancelLoan = async (loanId: string) => {
-    if (!confirm(t.cancelConfirm)) {
-      return
-    }
+    if (!confirm(t.cancelConfirm)) return
 
     try {
       const res = await fetch(`/api/loans/${loanId}/cancel`, {
@@ -589,7 +601,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
       }
 
       toast.success(lang === 'mr' ? "कर्ज यशस्वीरित्या रद्द केले गेले!" : "Loan cancelled successfully!")
-      fetchDetails() // Refresh meetings and loans list
+      fetchDetails()
     } catch (err: any) {
       toast.error(err.message || "Failed to cancel loan")
     }
@@ -599,9 +611,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
   const handleFinalize = async () => {
     if (closingBalance < 0) return
 
-    if (!confirm(t.finalizeConfirm)) {
-      return
-    }
+    if (!confirm(t.finalizeConfirm)) return
 
     setFinalizeLoading(true)
     try {
@@ -650,8 +660,8 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
 
   // Helpers for outstanding loans hint
   const getMemberOutstanding = (memberId: string) => {
-    const active = activeLoans.find(l => l.member_id === memberId)
-    return active ? active.outstanding_amount : 0
+    const active = activeLoans.find((l: any) => (l.member_id || l.memberId) === memberId)
+    return active ? Number(active.outstanding_amount ?? active.outstandingAmount ?? 0) : 0
   }
 
   // Render cell save indicator
@@ -669,29 +679,26 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-fadeIn">
       {/* Back button */}
-      <Link href="/meetings" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-orange-600 transition font-medium">
+      <Link href="/meetings" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-orange-600 dark:text-gray-400 dark:hover:text-orange-400 transition font-medium">
         {t.backToList}
       </Link>
 
       {/* Title block */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-gray-100">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-gray-200 dark:border-gray-800">
         <div>
-          <h1 className="text-3xl font-extrabold text-gray-900">
-            {formatMonthYear(meeting.month_year)} {t.meetingTitle}
+          <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white">
+            {monthYearValue ? formatMonthYear(monthYearValue) : ''} {t.meetingTitle}
           </h1>
-          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-gray-500">
-            <span>{t.dateLabel} <strong>{new Date(meeting.meeting_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</strong></span>
-            <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-            <span>{t.openingBalLabel} <strong className="text-gray-900">{formatRupees(meeting.opening_balance)}</strong></span>
-            {meeting.closing_date && (
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
+            <span>{t.dateLabel} <strong className="text-gray-900 dark:text-white">{formatDateString(meetingDateValue, lang)}</strong></span>
+            <span className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-gray-700" />
+            <span>{t.openingBalLabel} <strong className="text-gray-900 dark:text-white">{formatRupees(openingBalanceValue)}</strong></span>
+            {closingDateValue && (
               <>
-                <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-gray-700" />
                 <span>
-                  {t.closedLabel} <strong>
-                    {new Date(meeting.closing_date)
-                      .toLocaleDateString('en-IN', {
-                        day: '2-digit', month: 'long', year: 'numeric'
-                      })}
+                  {t.closedLabel} <strong className="text-gray-900 dark:text-white">
+                    {formatDateString(closingDateValue, lang)}
                   </strong>
                 </span>
               </>
@@ -700,12 +707,12 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
         </div>
         <div>
           {isFinalized ? (
-            <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-green-50 text-green-700 font-semibold text-sm border border-green-200">
+            <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-400 font-semibold text-sm border border-green-200 dark:border-green-900/40">
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               {t.finalizedBadge}
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-amber-50 text-amber-700 font-semibold text-sm border border-amber-200">
+            <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 font-semibold text-sm border border-amber-200 dark:border-amber-900/40">
               <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
               {t.draftBadge}
             </span>
@@ -720,43 +727,42 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
         <div className="lg:col-span-2 space-y-8">
           
           {/* Contributions Section */}
-          <div className="bg-white border border-gray-100 rounded-3xl overflow-hidden shadow-sm">
-            <div className="p-6 border-b border-gray-100 bg-gray-50/50">
-              <h2 className="text-lg font-bold text-gray-900">{t.contributionsHeader}</h2>
-              <p className="text-gray-500 text-xs mt-1">{t.contributionsSub}</p>
+          <div className="bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-3xl overflow-hidden shadow-sm">
+            <div className="p-6 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/40">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">{t.contributionsHeader}</h2>
+              <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">{t.contributionsSub}</p>
             </div>
             
             {/* MOBILE CONTRIBUTION CARDS */}
-            <div className="md:hidden divide-y divide-gray-100 bg-white">
-              {contributionsList.map((c, i) => {
-                const outstanding = getMemberOutstanding(c.member_id)
-                const isAbsent = !c.is_present
+            <div className="md:hidden divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-[#1A1D27]">
+              {contributionsList.map((c: any, i) => {
+                const mId = c.member_id || c.memberId
+                const outstanding = getMemberOutstanding(mId)
+                const isAbsent = !(c.is_present ?? c.isPresent)
 
                 return (
-                  <div key={c.id}
-                       className={`p-4 ${isAbsent ? 'bg-gray-50 opacity-70' : ''}`}>
+                  <div key={c.id || mId}
+                       className={`p-4 ${isAbsent ? 'bg-gray-50 dark:bg-gray-900/20 opacity-70' : ''}`}>
                     
                     {/* Member + Present toggle */}
                     <div className="flex items-center justify-between mb-3">
                       <div>
-                        <p className="font-bold text-gray-900 text-sm">
+                        <p className="font-bold text-gray-900 dark:text-white text-sm">
                           {c.member?.name}
                         </p>
                         {outstanding > 0 && (
-                          <p className="text-xs text-orange-500 mt-0.5 font-medium">
+                          <p className="text-xs text-orange-600 dark:text-orange-400 mt-0.5 font-medium">
                             {t.outstandingLabel} {formatRupees(outstanding)}
                           </p>
                         )}
                       </div>
                       <label className="flex items-center gap-2 cursor-pointer">
-                        <span className="text-xs text-gray-500 font-semibold">{t.presentLabel}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 font-semibold">{t.presentLabel}</span>
                         <input
                           type="checkbox"
-                          checked={c.is_present}
+                          checked={c.is_present ?? c.isPresent}
                           disabled={isFinalized}
-                          onChange={e => handlePresenceToggle(
-                            c.member_id, e.target.checked
-                          )}
+                          onChange={e => handlePresenceToggle(mId, e.target.checked)}
                           className="w-5 h-5 accent-orange-500 rounded cursor-pointer disabled:cursor-not-allowed"
                         />
                       </label>
@@ -765,35 +771,31 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                     {/* 2x2 input grid */}
                     <div className="grid grid-cols-2 gap-2">
                       {[
-                        { label: t.savingsLabel, field: 'savings_amount',
-                          disabled: isAbsent },
-                        { label: t.penaltyLabel, field: 'penalty_paid',
-                          disabled: false },
-                        { label: t.loanRepaidLabel, field: 'loan_repayment',
-                          disabled: isAbsent },
-                        { label: t.interestLabel, field: 'interest_paid',
-                          disabled: isAbsent },
-                      ].map(({ label, field, disabled }) => (
+                        { label: t.savingsLabel, field: 'savings_amount', valKey: 'savingsAmount', disabled: isAbsent },
+                        { label: t.penaltyLabel, field: 'penalty_paid', valKey: 'penaltyPaid', disabled: false },
+                        { label: t.loanRepaidLabel, field: 'loan_repayment', valKey: 'loanRepayment', disabled: isAbsent },
+                        { label: t.interestLabel, field: 'interest_paid', valKey: 'interestPaid', disabled: isAbsent },
+                      ].map(({ label, field, valKey, disabled }) => (
                         <div key={field}>
-                          <label className="text-xs text-gray-500 mb-1 block font-medium">
+                          <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">
                             {label}
                           </label>
                           <div className="relative">
                             <input
                               type="number" min="0"
-                              value={toR((c as any)[field])}
+                              value={toR(c[field] ?? c[valKey] ?? 0)}
                               disabled={isFinalized || disabled}
                               onChange={e => handleCellChange(
-                                c.member_id,
-                                field as keyof MeetingContribution,
+                                mId,
+                                field,
                                 toP(e.target.value)
                               )}
-                              className="w-full border border-gray-200 rounded-lg 
+                              className="w-full border border-gray-200 dark:border-gray-800 rounded-lg 
                                          px-2.5 py-2 text-sm outline-none
-                                         focus:border-orange-500 
-                                         disabled:bg-gray-100 transition"
+                                         focus:border-orange-500 dark:bg-gray-950 dark:text-white
+                                         disabled:bg-gray-100 dark:disabled:bg-gray-900/50 transition"
                             />
-                            {renderCellStatus(c.member_id, field)}
+                            {renderCellStatus(mId, field)}
                           </div>
                         </div>
                       ))}
@@ -806,7 +808,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-100">
+                  <tr className="bg-gray-50 dark:bg-gray-950 text-gray-500 dark:text-gray-400 font-semibold text-xs border-b border-gray-100 dark:border-gray-800">
                     <th className="px-4 py-3 text-center">#</th>
                     <th className="px-4 py-3">{t.loansListHeader}</th>
                     <th className="px-4 py-3 text-center">{t.presentLabel}</th>
@@ -816,18 +818,20 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                     <th className="px-4 py-3 w-28">{t.interestLabel}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 text-sm">
-                  {contributionsList.map((c, i) => {
-                    const outstanding = getMemberOutstanding(c.member_id)
-                    const rowOpacity = c.is_present ? "opacity-100" : "opacity-50 bg-gray-50/30"
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800 text-sm">
+                  {contributionsList.map((c: any, i) => {
+                    const mId = c.member_id || c.memberId
+                    const outstanding = getMemberOutstanding(mId)
+                    const isPresent = c.is_present ?? c.isPresent
+                    const rowOpacity = isPresent ? "opacity-100" : "opacity-60 bg-gray-50/50 dark:bg-gray-900/20"
                     
                     return (
-                      <tr key={c.id} className={`${rowOpacity} hover:bg-orange-50/5 transition-colors duration-150`}>
-                        <td className="px-4 py-4 text-center text-gray-400 font-medium">{i + 1}</td>
+                      <tr key={c.id || mId} className={`${rowOpacity} hover:bg-orange-50/5 dark:hover:bg-gray-900/30 transition-colors duration-150`}>
+                        <td className="px-4 py-4 text-center text-gray-400 dark:text-gray-500 font-medium">{i + 1}</td>
                         <td className="px-4 py-4">
-                          <div className="font-bold text-gray-900">{c.member?.name}</div>
+                          <div className="font-bold text-gray-900 dark:text-white">{c.member?.name}</div>
                           {outstanding > 0 && (
-                            <div className="text-[11px] text-orange-600 font-medium mt-0.5">
+                            <div className="text-[11px] text-orange-600 dark:text-orange-400 font-medium mt-0.5">
                               {t.outstandingLabel} {formatRupees(outstanding)}
                             </div>
                           )}
@@ -836,8 +840,8 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                           <input
                             type="checkbox"
                             disabled={isFinalized}
-                            checked={c.is_present}
-                            onChange={(e) => handlePresenceToggle(c.member_id, e.target.checked)}
+                            checked={isPresent}
+                            onChange={(e) => handlePresenceToggle(mId, e.target.checked)}
                             className="w-4.5 h-4.5 accent-orange-500 rounded-md outline-none cursor-pointer disabled:cursor-not-allowed"
                           />
                         </td>
@@ -845,45 +849,45 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                           <input
                             type="number"
                             min="0"
-                            disabled={isFinalized || !c.is_present}
-                            value={toR(c.savings_amount)}
-                            onChange={(e) => handleCellChange(c.member_id, 'savings_amount', toP(e.target.value))}
-                            className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-orange-500 disabled:bg-gray-100 transition"
+                            disabled={isFinalized || !isPresent}
+                            value={toR(c.savings_amount ?? c.savingsAmount ?? 0)}
+                            onChange={(e) => handleCellChange(mId, 'savings_amount', toP(e.target.value))}
+                            className="w-full border border-gray-200 dark:border-gray-800 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-orange-500 dark:bg-gray-950 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-900/50 transition"
                           />
-                          {renderCellStatus(c.member_id, 'savings_amount')}
+                          {renderCellStatus(mId, 'savings_amount')}
                         </td>
                         <td className="px-4 py-4 relative">
                           <input
                             type="number"
                             min="0"
                             disabled={isFinalized}
-                            value={toR(c.penalty_paid)}
-                            onChange={(e) => handleCellChange(c.member_id, 'penalty_paid', toP(e.target.value))}
-                            className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-orange-500 disabled:bg-gray-100 transition font-semibold text-red-600"
+                            value={toR(c.penalty_paid ?? c.penaltyPaid ?? 0)}
+                            onChange={(e) => handleCellChange(mId, 'penalty_paid', toP(e.target.value))}
+                            className="w-full border border-gray-200 dark:border-gray-800 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-orange-500 dark:bg-gray-950 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-900/50 transition font-semibold text-red-600 dark:text-red-400"
                           />
-                          {renderCellStatus(c.member_id, 'penalty_paid')}
+                          {renderCellStatus(mId, 'penalty_paid')}
                         </td>
                         <td className="px-4 py-4 relative">
                           <input
                             type="number"
                             min="0"
-                            disabled={isFinalized || !c.is_present}
-                            value={toR(c.loan_repayment)}
-                            onChange={(e) => handleCellChange(c.member_id, 'loan_repayment', toP(e.target.value))}
-                            className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-orange-500 disabled:bg-gray-100 transition"
+                            disabled={isFinalized || !isPresent}
+                            value={toR(c.loan_repayment ?? c.loanRepayment ?? 0)}
+                            onChange={(e) => handleCellChange(mId, 'loan_repayment', toP(e.target.value))}
+                            className="w-full border border-gray-200 dark:border-gray-800 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-orange-500 dark:bg-gray-950 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-900/50 transition"
                           />
-                          {renderCellStatus(c.member_id, 'loan_repayment')}
+                          {renderCellStatus(mId, 'loan_repayment')}
                         </td>
                         <td className="px-4 py-4 relative">
                           <input
                             type="number"
                             min="0"
-                            disabled={isFinalized || !c.is_present}
-                            value={toR(c.interest_paid)}
-                            onChange={(e) => handleCellChange(c.member_id, 'interest_paid', toP(e.target.value))}
-                            className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-orange-500 disabled:bg-gray-100 transition"
+                            disabled={isFinalized || !isPresent}
+                            value={toR(c.interest_paid ?? c.interestPaid ?? 0)}
+                            onChange={(e) => handleCellChange(mId, 'interest_paid', toP(e.target.value))}
+                            className="w-full border border-gray-200 dark:border-gray-800 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-orange-500 dark:bg-gray-950 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-900/50 transition"
                           />
-                          {renderCellStatus(c.member_id, 'interest_paid')}
+                          {renderCellStatus(mId, 'interest_paid')}
                         </td>
                       </tr>
                     )
@@ -894,26 +898,26 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
           </div>
 
           {/* Loans Issued Section */}
-          <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm space-y-6">
-            <div className="border-b border-gray-100 pb-4">
-              <h2 className="text-lg font-bold text-gray-900">{t.loansHeader}</h2>
-              <p className="text-gray-500 text-xs mt-1">{t.loansSub}</p>
+          <div className="bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-3xl p-6 shadow-sm space-y-6">
+            <div className="border-b border-gray-100 dark:border-gray-800 pb-4">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">{t.loansHeader}</h2>
+              <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">{t.loansSub}</p>
             </div>
 
             {/* Loan Issue Form */}
             {!isFinalized && (
-              <form onSubmit={handleIssueLoan} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5 items-end bg-gray-50/50 p-4 rounded-2xl border border-gray-100">
+              <form onSubmit={handleIssueLoan} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5 items-end bg-gray-50/50 dark:bg-gray-900/40 p-4 rounded-2xl border border-gray-100 dark:border-gray-800">
                 <div className="lg:col-span-1">
-                  <label className="block text-xs font-bold text-gray-700 mb-1">{t.selectMemberLabel}</label>
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">{t.selectMemberLabel}</label>
                   <select
                     value={loanForm.member_id}
                     onChange={(e) => setLoanForm({ ...loanForm, member_id: e.target.value, guarantor_id: "" })}
-                    className="w-full border border-gray-200 rounded-lg p-2 text-xs bg-white focus:border-orange-500 outline-none"
+                    className="w-full border border-gray-200 dark:border-gray-800 rounded-lg p-2 text-xs bg-white dark:bg-gray-950 text-gray-900 dark:text-white focus:border-orange-500 outline-none"
                   >
                     <option value="">{t.selectMemberOption}</option>
-                    {orgMembers.map(m => (
+                    {orgMembers.map((m: any) => (
                       <option key={m.id} value={m.id}>
-                        #{m.member_number} {m.name}
+                        #{m.member_number || m.memberNumber} {m.name}
                         {m.phone ? ` (${m.phone})` : ''}
                       </option>
                     ))}
@@ -922,16 +926,16 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">{t.guarantorLabel}</label>
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">{t.guarantorLabel}</label>
                   <select
                     value={loanForm.guarantor_id}
                     onChange={(e) => setLoanForm({ ...loanForm, guarantor_id: e.target.value })}
-                    className="w-full border border-gray-200 rounded-lg p-2 text-xs bg-white focus:border-orange-500 outline-none"
+                    className="w-full border border-gray-200 dark:border-gray-800 rounded-lg p-2 text-xs bg-white dark:bg-gray-950 text-gray-900 dark:text-white focus:border-orange-500 outline-none"
                   >
                     <option value="">{lang === 'mr' ? 'जामीनदार (पर्यायी)' : 'Guarantor (Optional)'}</option>
                     {orgMembers
-                      .filter(m => m.id !== loanForm.member_id)
-                      .map(m => (
+                      .filter((m: any) => m.id !== loanForm.member_id)
+                      .map((m: any) => (
                         <option key={m.id} value={m.id}>
                           {m.name}
                         </option>
@@ -940,54 +944,54 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">{t.amountLabel}</label>
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">{t.amountLabel}</label>
                   <input
                     type="number"
                     min="1"
                     placeholder={t.amountPlaceholder}
                     value={loanForm.amount}
                     onChange={(e) => setLoanForm({ ...loanForm, amount: e.target.value })}
-                    className="w-full border border-gray-200 rounded-lg p-2 text-xs focus:border-orange-500 outline-none"
+                    className="w-full border border-gray-200 dark:border-gray-800 rounded-lg p-2 text-xs bg-white dark:bg-gray-950 text-gray-900 dark:text-white focus:border-orange-500 outline-none"
                   />
                   {formErrors.amount && <p className="text-red-500 text-[10px] mt-0.5">{formErrors.amount}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">{t.rateLabel}</label>
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">{t.rateLabel}</label>
                   <input
                     type="number"
                     step="0.1"
                     placeholder="e.g. 2.0"
                     value={loanForm.interest_rate}
                     onChange={(e) => setLoanForm({ ...loanForm, interest_rate: e.target.value })}
-                    className="w-full border border-gray-200 rounded-lg p-2 text-xs focus:border-orange-500 outline-none"
+                    className="w-full border border-gray-200 dark:border-gray-800 rounded-lg p-2 text-xs bg-white dark:bg-gray-950 text-gray-900 dark:text-white focus:border-orange-500 outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">{t.termLabel}</label>
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">{t.termLabel}</label>
                   <input
                     type="number"
                     min="1"
                     value={loanForm.term_months}
                     onChange={(e) => setLoanForm({ ...loanForm, term_months: e.target.value })}
-                    className="w-full border border-gray-200 rounded-lg p-2 text-xs focus:border-orange-500 outline-none"
+                    className="w-full border border-gray-200 dark:border-gray-800 rounded-lg p-2 text-xs bg-white dark:bg-gray-950 text-gray-900 dark:text-white focus:border-orange-500 outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">{t.purposeLabel}</label>
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">{t.purposeLabel}</label>
                   <input
                     type="text"
                     placeholder={t.purposePlaceholder}
                     value={loanForm.purpose}
                     onChange={(e) => setLoanForm({ ...loanForm, purpose: e.target.value })}
-                    className="w-full border border-gray-200 rounded-lg p-2 text-xs focus:border-orange-500 outline-none"
+                    className="w-full border border-gray-200 dark:border-gray-800 rounded-lg p-2 text-xs bg-white dark:bg-gray-950 text-gray-900 dark:text-white focus:border-orange-500 outline-none"
                   />
                 </div>
 
-                <div className="sm:col-span-2 lg:col-span-6 flex justify-between items-center mt-2 pt-2 border-t border-gray-100/50">
-                  <span className="text-[10px] text-gray-400" dangerouslySetInnerHTML={{ __html: t.adminHint }} />
+                <div className="sm:col-span-2 lg:col-span-6 flex justify-between items-center mt-2 pt-2 border-t border-gray-100/50 dark:border-gray-800">
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500" dangerouslySetInnerHTML={{ __html: t.adminHint }} />
                   <button
                     type="submit"
                     className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-md transition active:scale-95"
@@ -1000,12 +1004,12 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
 
             {/* Issued Loans List */}
             {issuedLoans.length === 0 ? (
-              <p className="text-gray-400 text-xs italic text-center py-4">{t.noLoans}</p>
+              <p className="text-gray-400 dark:text-gray-500 text-xs italic text-center py-4">{t.noLoans}</p>
             ) : (
-              <div className="overflow-x-auto border border-gray-100 rounded-2xl">
+              <div className="overflow-x-auto border border-gray-100 dark:border-gray-800 rounded-2xl">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100">
+                    <tr className="bg-gray-50 dark:bg-gray-950 text-gray-500 dark:text-gray-400 font-semibold border-b border-gray-100 dark:border-gray-800">
                       <th className="px-4 py-2.5">{t.loansListHeader}</th>
                       <th className="px-4 py-2.5">{t.loansListAmount}</th>
                       <th className="px-4 py-2.5 text-center">{t.loansListInterest}</th>
@@ -1013,32 +1017,32 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                       <th className="px-4 py-2.5">{t.loansListStatus}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 font-medium">
-                    {issuedLoans.map(l => (
-                      <tr key={l.id} className="hover:bg-gray-50/50">
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800 font-medium">
+                    {issuedLoans.map((l: any) => (
+                      <tr key={l.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-900/30">
                         <td className="px-4 py-3">
-                          <div className="font-bold text-gray-900">{l.member?.name}</div>
-                          {(l as any).guarantor && (
-                            <div className="text-[10px] text-gray-500 font-semibold mt-0.5">
-                              {lang === 'mr' ? 'जामीनदार' : 'Guarantor'}: {(l as any).guarantor.name}
+                          <div className="font-bold text-gray-900 dark:text-white">{l.member?.name}</div>
+                          {l.guarantor && (
+                            <div className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold mt-0.5">
+                              {lang === 'mr' ? 'जामीनदार' : 'Guarantor'}: {l.guarantor.name}
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-gray-900">{formatRupees(l.loan_amount)}</td>
-                        <td className="px-4 py-3 text-center text-gray-600">{l.interest_rate}%</td>
-                        <td className="px-4 py-3 text-center text-gray-600">{l.term_months}m</td>
+                        <td className="px-4 py-3 text-gray-900 dark:text-white">{formatRupees(l.loan_amount ?? l.loanAmount ?? 0)}</td>
+                        <td className="px-4 py-3 text-center text-gray-600 dark:text-gray-300">{l.interest_rate ?? l.interestRate}%</td>
+                        <td className="px-4 py-3 text-center text-gray-600 dark:text-gray-300">{l.term_months ?? l.termMonths}m</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-between gap-2">
                             {l.status === 'PENDING' ? (
-                              <span className="inline-flex px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[10px]">
+                              <span className="inline-flex px-2 py-0.5 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 rounded-full text-[10px]">
                                 {t.awaitingApproval}
                               </span>
                             ) : l.status === 'ACTIVE' ? (
-                              <span className="inline-flex px-2 py-0.5 bg-green-50 text-green-700 rounded-full text-[10px]">
+                              <span className="inline-flex px-2 py-0.5 bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-400 rounded-full text-[10px]">
                                 {t.activeApproved}
                               </span>
                             ) : (
-                              <span className="inline-flex px-2 py-0.5 bg-red-50 text-red-700 rounded-full text-[10px]">
+                              <span className="inline-flex px-2 py-0.5 bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400 rounded-full text-[10px]">
                                 {l.status}
                               </span>
                             )}
@@ -1046,7 +1050,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                             {['SUPERADMIN', 'ADMIN'].includes(currentMemberRole) && ['ACTIVE', 'PENDING'].includes(l.status) && (
                               <button
                                 onClick={() => handleCancelLoan(l.id)}
-                                className="px-2 py-0.5 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-900/40 rounded-lg text-[10px] font-bold transition active:scale-95 ml-2"
+                                className="px-2 py-0.5 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-400 dark:hover:bg-red-900/50 rounded-lg text-[10px] font-bold transition active:scale-95 ml-2"
                               >
                                 {t.cancelBtn}
                               </button>
@@ -1065,10 +1069,10 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
             {/* Other Expenses Section */}
-            <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm space-y-4">
-              <div className="border-b border-gray-100 pb-3">
-                <h3 className="font-bold text-gray-900 text-base">{t.otherExpensesHeader}</h3>
-                <p className="text-gray-400 text-[10px] mt-0.5">{t.otherExpensesSub}</p>
+            <div className="bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-3xl p-6 shadow-sm space-y-4">
+              <div className="border-b border-gray-100 dark:border-gray-800 pb-3">
+                <h3 className="font-bold text-gray-900 dark:text-white text-base">{t.otherExpensesHeader}</h3>
+                <p className="text-gray-400 dark:text-gray-400 text-[10px] mt-0.5">{t.otherExpensesSub}</p>
               </div>
 
               {!isFinalized && (
@@ -1077,7 +1081,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                     <select
                       value={expenseForm.category}
                       onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })}
-                      className="w-full border border-gray-200 rounded-lg p-2 text-xs bg-white outline-none focus:border-orange-500"
+                      className="w-full border border-gray-200 dark:border-gray-800 rounded-lg p-2 text-xs bg-white dark:bg-gray-950 text-gray-900 dark:text-white outline-none focus:border-orange-500"
                     >
                       <option value="MISCELLANEOUS">MISCELLANEOUS</option>
                       <option value="STATIONERY">STATIONERY</option>
@@ -1090,7 +1094,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                       placeholder={t.descriptionPlaceholder}
                       value={expenseForm.description}
                       onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })}
-                      className="w-full border border-gray-200 rounded-lg p-2 text-xs outline-none focus:border-orange-500"
+                      className="w-full border border-gray-200 dark:border-gray-800 rounded-lg p-2 text-xs bg-white dark:bg-gray-950 text-gray-900 dark:text-white outline-none focus:border-orange-500"
                     />
                   </div>
                   <div className="space-y-2">
@@ -1100,11 +1104,11 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                       required
                       value={expenseForm.amount}
                       onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
-                      className="w-full border border-gray-200 rounded-lg p-2 text-xs outline-none focus:border-orange-500"
+                      className="w-full border border-gray-200 dark:border-gray-800 rounded-lg p-2 text-xs bg-white dark:bg-gray-950 text-gray-900 dark:text-white outline-none focus:border-orange-500"
                     />
                     <button
                       type="submit"
-                      className="w-full bg-red-50 text-red-600 hover:bg-red-100 font-bold p-2 rounded-lg text-xs transition"
+                      className="w-full bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-400 dark:hover:bg-red-900/50 font-bold p-2 rounded-lg text-xs transition"
                     >
                       {t.addExpenseBtn}
                     </button>
@@ -1114,17 +1118,17 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
 
               {/* Expenses List */}
               {expenses.length === 0 ? (
-                <p className="text-gray-400 text-xs italic text-center py-2">{t.noExpenses}</p>
+                <p className="text-gray-400 dark:text-gray-500 text-xs italic text-center py-2">{t.noExpenses}</p>
               ) : (
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {expenses.map(e => (
-                    <div key={e.id} className="flex justify-between items-center p-2.5 border border-gray-50 bg-gray-50/20 rounded-xl text-xs">
+                    <div key={e.id} className="flex justify-between items-center p-2.5 border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 rounded-xl text-xs">
                       <div>
-                        <div className="font-bold text-gray-800">{e.category}</div>
-                        {e.description && <div className="text-gray-400 text-[10px]">{e.description}</div>}
+                        <div className="font-bold text-gray-800 dark:text-gray-200">{e.category}</div>
+                        {e.description && <div className="text-gray-400 dark:text-gray-500 text-[10px]">{e.description}</div>}
                       </div>
                       <div className="flex items-center gap-2 font-semibold">
-                        <span className="text-red-600">-{formatRupees(e.amount)}</span>
+                        <span className="text-red-600 dark:text-red-400">-{formatRupees(e.amount)}</span>
                         {!isFinalized && (
                           <button
                             onClick={() => handleDeleteExpense(e.id)}
@@ -1141,10 +1145,10 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
             </div>
 
             {/* Other Income Section */}
-            <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm space-y-4">
-              <div className="border-b border-gray-100 pb-3">
-                <h3 className="font-bold text-gray-900 text-base">{t.otherIncomeHeader}</h3>
-                <p className="text-gray-400 text-[10px] mt-0.5">{t.otherIncomeSub}</p>
+            <div className="bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-3xl p-6 shadow-sm space-y-4">
+              <div className="border-b border-gray-100 dark:border-gray-800 pb-3">
+                <h3 className="font-bold text-gray-900 dark:text-white text-base">{t.otherIncomeHeader}</h3>
+                <p className="text-gray-400 dark:text-gray-400 text-[10px] mt-0.5">{t.otherIncomeSub}</p>
               </div>
 
               {!isFinalized && (
@@ -1153,7 +1157,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                     <select
                       value={incomeForm.category}
                       onChange={(e) => setIncomeForm({ ...incomeForm, category: e.target.value })}
-                      className="w-full border border-gray-200 rounded-lg p-2 text-xs bg-white outline-none focus:border-orange-500"
+                      className="w-full border border-gray-200 dark:border-gray-800 rounded-lg p-2 text-xs bg-white dark:bg-gray-950 text-gray-900 dark:text-white outline-none focus:border-orange-500"
                     >
                       <option value="OTHER">OTHER</option>
                       <option value="DONATION">DONATION</option>
@@ -1165,7 +1169,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                       placeholder={t.descriptionPlaceholder}
                       value={incomeForm.description}
                       onChange={(e) => setIncomeForm({ ...incomeForm, description: e.target.value })}
-                      className="w-full border border-gray-200 rounded-lg p-2 text-xs outline-none focus:border-orange-500"
+                      className="w-full border border-gray-200 dark:border-gray-800 rounded-lg p-2 text-xs bg-white dark:bg-gray-950 text-gray-900 dark:text-white outline-none focus:border-orange-500"
                     />
                   </div>
                   <div className="space-y-2">
@@ -1175,11 +1179,11 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                       required
                       value={incomeForm.amount}
                       onChange={(e) => setIncomeForm({ ...incomeForm, amount: e.target.value })}
-                      className="w-full border border-gray-200 rounded-lg p-2 text-xs outline-none focus:border-orange-500"
+                      className="w-full border border-gray-200 dark:border-gray-800 rounded-lg p-2 text-xs bg-white dark:bg-gray-950 text-gray-900 dark:text-white outline-none focus:border-orange-500"
                     />
                     <button
                       type="submit"
-                      className="w-full bg-green-50 text-green-600 hover:bg-green-100 font-bold p-2 rounded-lg text-xs transition"
+                      className="w-full bg-green-50 text-green-600 hover:bg-green-100 dark:bg-green-950/40 dark:text-green-400 dark:hover:bg-green-900/50 font-bold p-2 rounded-lg text-xs transition"
                     >
                       {t.addIncomeBtn}
                     </button>
@@ -1189,17 +1193,17 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
 
               {/* Income List */}
               {incomes.length === 0 ? (
-                <p className="text-gray-400 text-xs italic text-center py-2">{t.noIncome}</p>
+                <p className="text-gray-400 dark:text-gray-500 text-xs italic text-center py-2">{t.noIncome}</p>
               ) : (
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {incomes.map(i => (
-                    <div key={i.id} className="flex justify-between items-center p-2.5 border border-gray-50 bg-gray-50/20 rounded-xl text-xs">
+                    <div key={i.id} className="flex justify-between items-center p-2.5 border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 rounded-xl text-xs">
                       <div>
-                        <div className="font-bold text-gray-800">{i.category}</div>
-                        {i.description && <div className="text-gray-400 text-[10px]">{i.description}</div>}
+                        <div className="font-bold text-gray-800 dark:text-gray-200">{i.category}</div>
+                        {i.description && <div className="text-gray-400 dark:text-gray-500 text-[10px]">{i.description}</div>}
                       </div>
                       <div className="flex items-center gap-2 font-semibold">
-                        <span className="text-green-600">+{formatRupees(i.amount)}</span>
+                        <span className="text-green-600 dark:text-green-400">+{formatRupees(i.amount)}</span>
                         {!isFinalized && (
                           <button
                             onClick={() => handleDeleteIncome(i.id)}
@@ -1221,85 +1225,85 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
         
         {/* Right Column (Sticky Summary Sidebar) */}
         <div className="lg:col-span-1">
-          <div className="lg:hidden h-px bg-gray-100 -mx-4 mb-6" />
+          <div className="lg:hidden h-px bg-gray-100 dark:bg-gray-800 -mx-4 mb-6" />
           <div className="sticky top-6 space-y-6">
             
             {/* Summary Card */}
-            <div className="bg-white border-2 border-orange-100 rounded-3xl p-6 shadow-xl space-y-6">
+            <div className="bg-white dark:bg-[#1A1D27] border-2 border-orange-100 dark:border-gray-800 rounded-3xl p-6 shadow-xl space-y-6">
               <div>
-                <h2 className="text-xl font-extrabold text-gray-900 bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
+                <h2 className="text-xl font-extrabold bg-gradient-to-r from-orange-600 to-amber-600 dark:from-orange-400 dark:to-amber-400 bg-clip-text text-transparent">
                   {t.summaryHeader}
                 </h2>
-                <p className="text-gray-500 text-xs mt-1">{t.summarySub}</p>
+                <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">{t.summarySub}</p>
               </div>
 
               <div className="space-y-3.5 text-sm font-medium">
-                <div className="flex justify-between text-gray-500">
+                <div className="flex justify-between text-gray-500 dark:text-gray-400">
                   <span>{t.summaryOpening}</span>
-                  <span className="text-gray-900">{formatRupees(meeting.opening_balance)}</span>
+                  <span className="text-gray-900 dark:text-white font-bold">{formatRupees(openingBalanceValue)}</span>
                 </div>
                 
-                <hr className="border-gray-100" />
+                <hr className="border-gray-100 dark:border-gray-800" />
                 
-                <div className="flex justify-between text-gray-500 text-xs">
+                <div className="flex justify-between text-gray-500 dark:text-gray-400 text-xs">
                   <span>{t.summarySavings}</span>
-                  <span className="text-gray-700">+{formatRupees(sumSavings)}</span>
+                  <span className="text-gray-700 dark:text-gray-300">+{formatRupees(sumSavings)}</span>
                 </div>
-                <div className="flex justify-between text-gray-500 text-xs">
+                <div className="flex justify-between text-gray-500 dark:text-gray-400 text-xs">
                   <span>{t.summaryPenalties}</span>
-                  <span className="text-gray-700">+{formatRupees(sumPenalties)}</span>
+                  <span className="text-gray-700 dark:text-gray-300">+{formatRupees(sumPenalties)}</span>
                 </div>
-                <div className="flex justify-between text-gray-500 text-xs">
+                <div className="flex justify-between text-gray-500 dark:text-gray-400 text-xs">
                   <span>{t.summaryLoanRepaid}</span>
-                  <span className="text-gray-700">+{formatRupees(sumRepayments)}</span>
+                  <span className="text-gray-700 dark:text-gray-300">+{formatRupees(sumRepayments)}</span>
                 </div>
-                <div className="flex justify-between text-gray-500 text-xs">
+                <div className="flex justify-between text-gray-500 dark:text-gray-400 text-xs">
                   <span>{t.summaryInterest}</span>
-                  <span className="text-gray-700">+{formatRupees(sumInterest)}</span>
+                  <span className="text-gray-700 dark:text-gray-300">+{formatRupees(sumInterest)}</span>
                 </div>
-                <div className="flex justify-between text-gray-500 text-xs">
+                <div className="flex justify-between text-gray-500 dark:text-gray-400 text-xs">
                   <span>{t.summaryOtherIncome}</span>
-                  <span className="text-gray-700">+{formatRupees(sumOtherContributions + sumIncomes)}</span>
+                  <span className="text-gray-700 dark:text-gray-300">+{formatRupees(sumOtherContributions + sumIncomes)}</span>
                 </div>
 
-                <div className="flex justify-between font-bold text-green-700 bg-green-50 p-2.5 rounded-xl border border-green-200">
+                <div className="flex justify-between font-bold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/30 p-2.5 rounded-xl border border-green-200 dark:border-green-900/40">
                   <span>{t.summaryTotalReceipts}</span>
                   <span>{formatRupees(totalReceipts)}</span>
                 </div>
 
-                <hr className="border-gray-100" />
+                <hr className="border-gray-100 dark:border-gray-800" />
 
-                <div className="flex justify-between text-gray-500 text-xs">
+                <div className="flex justify-between text-gray-500 dark:text-gray-400 text-xs">
                   <span>{t.summaryLoansGiven}</span>
-                  <span className="text-gray-700">-{formatRupees(sumLoansIssued)}</span>
+                  <span className="text-gray-700 dark:text-gray-300">-{formatRupees(sumLoansIssued)}</span>
                 </div>
-                <div className="flex justify-between text-gray-500 text-xs">
+                <div className="flex justify-between text-gray-500 dark:text-gray-400 text-xs">
                   <span>{t.summaryOtherExpenses}</span>
-                  <span className="text-gray-700">-{formatRupees(sumExpenses)}</span>
+                  <span className="text-gray-700 dark:text-gray-300">-{formatRupees(sumExpenses)}</span>
                 </div>
 
-                <div className="flex justify-between font-bold text-red-600 bg-red-50/50 p-2.5 rounded-xl border border-red-100/50">
+                <div className="flex justify-between font-bold text-red-600 dark:text-red-400 bg-red-50/50 dark:bg-red-950/30 p-2.5 rounded-xl border border-red-100/50 dark:border-red-900/40">
                   <span>{t.summaryTotalExpenses}</span>
                   <span>{formatRupees(totalExpenses)}</span>
                 </div>
 
-                <hr className="border-2 border-dashed border-gray-100" />
+                <hr className="border-2 border-dashed border-gray-100 dark:border-gray-800" />
 
-                <div className={`flex justify-between items-center p-3 rounded-2xl border ${closingBalance >= 0 ? "bg-orange-50 border-orange-200 text-orange-700" : "bg-red-50/80 border-red-200 text-red-700"}`}>
+                <div className={`flex justify-between items-center p-3 rounded-2xl border ${closingBalance >= 0 ? "bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-900/40 text-orange-700 dark:text-orange-300" : "bg-red-50/80 dark:bg-red-950/40 border-red-200 dark:border-red-900/40 text-red-700 dark:text-red-300"}`}>
                   <span className="text-xs font-bold uppercase tracking-wider">{t.summaryClosingBalance}</span>
                   <span className="text-2xl font-black">{formatRupees(closingBalance)}</span>
                 </div>
               </div>
 
               {/* Attendance Indicator */}
-              <div className="bg-gray-50 p-4 rounded-2xl flex items-center justify-between text-xs text-gray-500">
+              <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-gray-800">
                 <span>{t.attendanceLabel}</span>
-                <span className="font-bold text-gray-900">{presentMembers} / {totalMembers} {t.attendanceSub}</span>
+                <span className="font-bold text-gray-900 dark:text-white">{presentMembers} / {totalMembers} {t.attendanceSub}</span>
               </div>
 
               {/* Alerts & Action Buttons */}
               {closingBalance < 0 && (
-                <div className="bg-red-50 border border-red-200 text-red-600 rounded-2xl p-4 text-xs flex gap-2 font-medium">
+                <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 rounded-2xl p-4 text-xs flex gap-2 font-medium">
                   <span className="text-base">⚠️</span>
                   <span>{t.negativeBalanceWarning}</span>
                 </div>
@@ -1308,18 +1312,18 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
               {!isFinalized && currentMemberRole === 'SUPERADMIN' && (
                 <div className="space-y-3">
                   <div>
-                    <label className="text-xs font-semibold text-gray-700 block mb-1">
+                    <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 block mb-1">
                       {t.closingDateLabel}
                     </label>
                     <input
                       type="date"
                       value={closingDate}
                       onChange={e => setClosingDate(e.target.value)}
-                      className="w-full border border-gray-200 rounded-xl 
-                                 px-3 py-2 text-sm focus:outline-none 
+                      className="w-full border border-gray-200 dark:border-gray-800 rounded-xl 
+                                 px-3 py-2 text-sm focus:outline-none bg-white dark:bg-gray-950 text-gray-900 dark:text-white
                                  focus:ring-2 focus:ring-orange-400"
                     />
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                       {t.closingDateSub}
                     </p>
                   </div>
@@ -1334,17 +1338,17 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
               )}
 
               {!isFinalized && currentMemberRole === 'ADMIN' && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700 text-center font-semibold">
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 rounded-lg text-sm text-amber-700 dark:text-amber-400 text-center font-semibold">
                   {t.onlySuperadminNotice}
                 </div>
               )}
             </div>
 
             {/* Meeting Notes Card */}
-            <div className="bg-white border border-gray-150 rounded-3xl p-6 shadow-md space-y-4">
-              <div className="flex items-center gap-2 pb-3 border-b border-gray-50">
+            <div className="bg-white dark:bg-[#1A1D27] border border-gray-150 dark:border-gray-800 rounded-3xl p-6 shadow-md space-y-4">
+              <div className="flex items-center gap-2 pb-3 border-b border-gray-100 dark:border-gray-800">
                 <span className="text-xl">📝</span>
-                <h3 className="font-extrabold text-gray-900 text-sm md:text-base">
+                <h3 className="font-extrabold text-gray-900 dark:text-white text-sm md:text-base">
                   {t.notesCardTitle}
                 </h3>
               </div>
@@ -1356,7 +1360,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                     rows={6}
                     value={meetingNotes}
                     onChange={(e) => setMeetingNotes(e.target.value)}
-                    className="w-full border border-gray-200 rounded-2xl p-4 text-xs md:text-sm outline-none focus:ring-2 focus:ring-orange-400 transition"
+                    className="w-full border border-gray-200 dark:border-gray-800 rounded-2xl p-4 text-xs md:text-sm outline-none focus:ring-2 focus:ring-orange-400 transition bg-white dark:bg-gray-950 text-gray-900 dark:text-white"
                   />
                   <button
                     onClick={handleSaveNotes}
@@ -1367,9 +1371,9 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                   </button>
                 </div>
               ) : (
-                <div className="bg-amber-50/20 border border-amber-100/50 rounded-2xl p-4 text-xs md:text-sm text-gray-700 whitespace-pre-wrap leading-relaxed shadow-inner">
+                <div className="bg-amber-50/20 dark:bg-gray-900/40 border border-amber-100/50 dark:border-gray-800 rounded-2xl p-4 text-xs md:text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed shadow-inner">
                   {meetingNotes.trim() ? meetingNotes : (
-                    <p className="text-gray-400 italic text-center py-2">{t.noNotesText}</p>
+                    <p className="text-gray-400 dark:text-gray-500 italic text-center py-2">{t.noNotesText}</p>
                   )}
                 </div>
               )}
@@ -1383,4 +1387,3 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
     </div>
   )
 }
-

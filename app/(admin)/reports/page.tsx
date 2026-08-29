@@ -41,14 +41,14 @@ export default async function ReportsPage() {
     }),
   ])
 
-  const safeMeetings = meetingsData.map((m) => ({
+  const safeMeetings = meetingsData.map((m: any) => ({
     ...m,
     organization_id: m.organizationId,
     month_year: m.monthYear,
     meeting_date: m.meetingDate.toISOString().split("T")[0],
     opening_balance: Number(m.openingBalance),
     created_at: m.createdAt.toISOString(),
-    meeting_contributions: m.contributions.map((c) => ({
+    meeting_contributions: m.contributions.map((c: any) => ({
       ...c,
       meeting_id: c.meetingId,
       member_id: c.memberId,
@@ -60,21 +60,21 @@ export default async function ReportsPage() {
       is_present: c.isPresent,
       member: toSafeMember(c.member),
     })),
-    meeting_expenses: m.expenses.map((e) => ({
+    meeting_expenses: m.expenses.map((e: any) => ({
       ...e,
       meeting_id: e.meetingId,
       amount: Number(e.amount),
     })),
-    meeting_income: (m.incomes || []).map((i) => ({
+    meeting_income: (m.incomes || []).map((i: any) => ({
       ...i,
       meeting_id: i.meetingId,
       amount: Number(i.amount),
     })),
   }))
 
-  const safeMembers = membersData.map((m) => toSafeMember(m))
+  const safeMembers = membersData.map((m: any) => toSafeMember(m))
 
-  const safeLoans = loansData.map((l) => ({
+  const safeLoans = loansData.map((l: any) => ({
     ...l,
     organization_id: l.organizationId,
     member_id: l.memberId,
@@ -86,7 +86,7 @@ export default async function ReportsPage() {
     term_months: l.termMonths,
     created_at: l.createdAt.toISOString(),
     member: toSafeMember(l.member),
-    loan_emis: l.emis.map((e) => ({
+    loan_emis: l.emis.map((e: any) => ({
       ...e,
       loan_id: e.loanId,
       month_year: e.monthYear,

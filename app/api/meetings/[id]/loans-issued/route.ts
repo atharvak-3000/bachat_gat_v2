@@ -126,7 +126,7 @@ export async function POST(
     const finalInterestRate = interest_rate ?? 2.0
     const finalTermMonths = term_months ?? 12
 
-    const loan = await prisma.$transaction(async (tx) => {
+    const loan = await prisma.$transaction(async (tx: any) => {
       const createdLoan = await tx.loan.create({
         data: {
           organizationId: performer.organizationId,

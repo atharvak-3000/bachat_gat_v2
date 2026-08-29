@@ -25,11 +25,11 @@ export default async function MeetingsPage() {
     }),
   ])
 
-  const meetingsWithTotals = meetings.map((m) => {
+  const meetingsWithTotals = meetings.map((m: any) => {
     const meetingDateStr = m.meetingDate.toISOString().split("T")[0]
     const mContribs = contributions
-      .filter((c) => c.meetingId === m.id)
-      .map((c) => ({
+      .filter((c: any) => c.meetingId === m.id)
+      .map((c: any) => ({
         savings_amount: Number(c.savingsAmount),
         loan_repayment: Number(c.loanRepayment),
         interest_paid: Number(c.interestPaid),
@@ -39,20 +39,20 @@ export default async function MeetingsPage() {
       }))
 
     const mExps = expenses
-      .filter((e) => e.meetingId === m.id)
-      .reduce((sum, e) => sum + Number(e.amount), 0)
+      .filter((e: any) => e.meetingId === m.id)
+      .reduce((sum: number, e: any) => sum + Number(e.amount), 0)
 
     const mIncs = income
-      .filter((i) => i.meetingId === m.id)
-      .reduce((sum, i) => sum + Number(i.amount), 0)
+      .filter((i: any) => i.meetingId === m.id)
+      .reduce((sum: number, i: any) => sum + Number(i.amount), 0)
 
     const mLoans = loans
       .filter(
-        (l) =>
+        (l: any) =>
           l.disbursedDate.toISOString().split("T")[0] === meetingDateStr &&
           ["ACTIVE", "CLOSED"].includes(l.status)
       )
-      .reduce((sum, l) => sum + Number(l.loanAmount), 0)
+      .reduce((sum: number, l: any) => sum + Number(l.loanAmount), 0)
 
     const totals = calcMeetingTotals({
       opening_balance: Number(m.openingBalance),

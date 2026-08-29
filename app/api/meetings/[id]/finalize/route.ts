@@ -36,17 +36,17 @@ export async function POST(
 
     const meetingDateStr = meeting.meetingDate.toISOString().split("T")[0]
     const activeIssuedLoans = loans.filter(
-      (l) =>
+      (l: any) =>
         l.disbursedDate.toISOString().split("T")[0] === meetingDateStr &&
         ["ACTIVE", "CLOSED"].includes(l.status)
     )
-    const loansIssuedAmount = activeIssuedLoans.reduce((sum, l) => sum + Number(l.loanAmount), 0)
-    const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount), 0)
-    const totalIncome = income.reduce((sum, i) => sum + Number(i.amount), 0)
+    const loansIssuedAmount = activeIssuedLoans.reduce((sum: number, l: any) => sum + Number(l.loanAmount), 0)
+    const totalExpenses = expenses.reduce((sum: number, e: any) => sum + Number(e.amount), 0)
+    const totalIncome = income.reduce((sum: number, i: any) => sum + Number(i.amount), 0)
 
     const totals = calcMeetingTotals({
       opening_balance: Number(meeting.openingBalance),
-      contributions: contributions.map((c) => ({
+      contributions: contributions.map((c: any) => ({
         savings_amount: Number(c.savingsAmount),
         loan_repayment: Number(c.loanRepayment),
         interest_paid: Number(c.interestPaid),
@@ -63,7 +63,7 @@ export async function POST(
       return NextResponse.json({ error: "Negative closing balance — cannot finalize meeting" }, { status: 400 })
     }
 
-    const finalizedMeeting = await prisma.$transaction(async (tx) => {
+    const finalizedMeeting = await prisma.$transaction(async (tx: any) => {
       const updatedMeeting = await tx.meeting.update({
         where: { id },
         data: {

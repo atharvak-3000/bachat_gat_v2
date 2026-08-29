@@ -28,7 +28,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
       return NextResponse.json({ error: "Member must be pending or active" }, { status: 400 })
     }
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       await tx.member.update({
         where: { id: target.id },
         data: { status: "REJECTED", isActive: false },

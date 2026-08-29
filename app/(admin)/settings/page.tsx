@@ -27,7 +27,7 @@ export default async function SettingsPage() {
     }),
   ])
 
-  const safeAdmins = admins.map((m) => toSafeMember(m))
+  const safeAdmins = admins.map((m: any) => toSafeMember(m))
 
   return (
     <SettingsClient

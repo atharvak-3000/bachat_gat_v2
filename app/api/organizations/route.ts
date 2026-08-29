@@ -62,7 +62,7 @@ export async function POST(req: Request) {
 
     const passwordHash = password ? await bcrypt.hash(password, 10) : null
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       const org = await tx.organization.create({
         data: {
           name,

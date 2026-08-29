@@ -77,7 +77,7 @@ export async function POST(
       }
     }
 
-    const updatedLoan = await prisma.$transaction(async (tx) => {
+    const updatedLoan = await prisma.$transaction(async (tx: any) => {
       const data: any = {
         status: "ACTIVE",
         outstandingAmount: loan.loanAmount,

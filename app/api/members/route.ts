@@ -29,7 +29,7 @@ export async function GET(req: Request) {
       orderBy: { memberNumber: "asc" },
     })
 
-    const safeMembers = members.map((m) => toSafeMember(m))
+    const safeMembers = members.map((m: any) => toSafeMember(m))
     return NextResponse.json(safeMembers)
   } catch (error: any) {
     if (error?.message === "UNAUTHENTICATED" || error?.message === "UNAUTHORIZED" || error?.message === "FORBIDDEN") {

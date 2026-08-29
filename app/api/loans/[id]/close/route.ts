@@ -25,7 +25,7 @@ export async function POST(
       return NextResponse.json({ error: "Only ACTIVE loans can be closed" }, { status: 400 })
     }
 
-    const updatedLoan = await prisma.$transaction(async (tx) => {
+    const updatedLoan = await prisma.$transaction(async (tx: any) => {
       const res = await tx.loan.update({
         where: { id },
         data: {

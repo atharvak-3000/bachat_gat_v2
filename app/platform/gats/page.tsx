@@ -11,7 +11,7 @@ export default async function PlatformGatsPage() {
     orderBy: { createdAt: "desc" },
   })
 
-  const formattedOrgs = orgs.map((org) => ({
+  const formattedOrgs = orgs.map((org: any) => ({
     ...org,
     is_approved: org.isApproved,
     group_code: org.groupCode,

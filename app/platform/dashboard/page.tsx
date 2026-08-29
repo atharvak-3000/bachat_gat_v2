@@ -9,8 +9,8 @@ export default async function PlatformDashboardPage() {
   ])
 
   const totalGats = orgs.length
-  const pendingGats = orgs.filter((o) => !o.isApproved).length
-  const activeSubs = orgs.filter((o) => o.subscriptionStatus === "ACTIVE").length
+  const pendingGats = orgs.filter((o: any) => !o.isApproved).length
+  const activeSubs = orgs.filter((o: any) => o.subscriptionStatus === "ACTIVE").length
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">

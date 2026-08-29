@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import prisma from "@/lib/prisma"
+import prisma, { normalizePrismaObject } from "@/lib/prisma"
 import { requireAdminOrAbove, requireAuth, toSafeMember } from "@/lib/auth"
 
 export async function GET(
@@ -10,14 +10,14 @@ export async function GET(
     const performer = await requireAuth()
     const { id } = await params
 
-    const meeting = await prisma.meeting.findFirst({
+    const rawMeeting = await prisma.meeting.findFirst({
       where: {
         id,
         organizationId: performer.organizationId,
       },
     })
 
-    if (!meeting) {
+    if (!rawMeeting) {
       return NextResponse.json({ error: "Meeting not found" }, { status: 404 })
     }
 
@@ -44,31 +44,32 @@ export async function GET(
       }),
     ])
 
-    const safeContributions = contributions.map((c) => ({
+    const safeContributions = contributions.map((c: any) => ({
       ...c,
       member: toSafeMember(c.member),
     }))
 
-    const safeLoans = allLoans.map((l) => ({
+    const safeLoans = allLoans.map((l: any) => ({
       ...l,
       member: toSafeMember(l.member),
     }))
 
-    const meetingDateStr = meeting.meetingDate.toISOString().split("T")[0]
+    const meetingDateStr = rawMeeting.meetingDate.toISOString().split("T")[0]
     const loansIssued = safeLoans.filter(
-      (l) => l.disbursedDate.toISOString().split("T")[0] === meetingDateStr
+      (l: any) => l.disbursedDate.toISOString().split("T")[0] === meetingDateStr
     )
-    const activeLoans = safeLoans.filter((l) => l.status === "ACTIVE")
+    const activeLoans = safeLoans.filter((l: any) => l.status === "ACTIVE")
 
     return NextResponse.json({
-      meeting,
-      contributions: safeContributions || [],
-      expenses: expenses || [],
-      income: income || [],
-      loans_issued: loansIssued,
-      active_loans: activeLoans,
-      org_settings: orgSettings,
+      meeting: normalizePrismaObject(rawMeeting),
+      contributions: normalizePrismaObject(safeContributions || []),
+      expenses: normalizePrismaObject(expenses || []),
+      income: normalizePrismaObject(income || []),
+      loans_issued: normalizePrismaObject(loansIssued),
+      active_loans: normalizePrismaObject(activeLoans),
+      org_settings: normalizePrismaObject(orgSettings),
     })
+
   } catch (error: any) {
     if (error?.message === "UNAUTHENTICATED" || error?.message === "UNAUTHORIZED" || error?.message === "FORBIDDEN") {
       return NextResponse.json({ error: error.message }, { status: error.message === "UNAUTHENTICATED" ? 401 : 403 })
@@ -112,7 +113,7 @@ export async function PATCH(
       data,
     })
 
-    return NextResponse.json(updatedMeeting)
+    return NextResponse.json(normalizePrismaObject(updatedMeeting))
   } catch (error: any) {
     if (error?.message === "UNAUTHENTICATED" || error?.message === "UNAUTHORIZED" || error?.message === "FORBIDDEN") {
       return NextResponse.json({ error: error.message }, { status: error.message === "UNAUTHENTICATED" ? 401 : 403 })

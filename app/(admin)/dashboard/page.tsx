@@ -35,8 +35,8 @@ export default async function DashboardPage() {
     prisma.meetingIncome.findMany(),
   ])
 
-  const safeMembersList = allMembers.map((m) => toSafeMember(m)) as unknown as Member[]
-  const meetingsList = meetings.map((m) => ({
+  const safeMembersList = allMembers.map((m: any) => toSafeMember(m)) as unknown as Member[]
+  const meetingsList = meetings.map((m: any) => ({
     ...m,
     organization_id: m.organizationId,
     month_year: m.monthYear,
@@ -45,7 +45,7 @@ export default async function DashboardPage() {
     created_at: m.createdAt.toISOString(),
   })) as unknown as Meeting[]
 
-  const loansList = loans.map((l) => ({
+  const loansList = loans.map((l: any) => ({
     ...l,
     organization_id: l.organizationId,
     member_id: l.memberId,
@@ -58,7 +58,7 @@ export default async function DashboardPage() {
     member: toSafeMember(l.member),
   })) as unknown as (Loan & { member: Member })[]
 
-  const logsList = recentLogs.map((log) => ({
+  const logsList = recentLogs.map((log: any) => ({
     ...log,
     organization_id: log.organizationId,
     performed_by: log.performedBy,
@@ -67,20 +67,20 @@ export default async function DashboardPage() {
     created_at: log.createdAt.toISOString(),
   })) as unknown as ActivityLog[]
 
-  const activeMembers = safeMembersList.filter((m) => m.status === "ACTIVE" && m.is_active)
-  const pendingMembers = safeMembersList.filter((m) => m.status === "PENDING")
+  const activeMembers = safeMembersList.filter((m: any) => m.status === "ACTIVE" && m.is_active)
+  const pendingMembers = safeMembersList.filter((m: any) => m.status === "PENDING")
 
-  const exps = expenses.map((e) => ({ meeting_id: e.meetingId, amount: Number(e.amount) }))
-  const incs = incomes.map((i) => ({ meeting_id: i.meetingId, amount: Number(i.amount) }))
+  const exps = expenses.map((e: any) => ({ meeting_id: e.meetingId, amount: Number(e.amount) }))
+  const incs = incomes.map((i: any) => ({ meeting_id: i.meetingId, amount: Number(i.amount) }))
 
-  const memberIds = activeMembers.map((m) => m.id)
+  const memberIds = activeMembers.map((m: any) => m.id)
   let allContributions: any[] = []
 
   if (memberIds.length > 0) {
     const contribs = await prisma.meetingContribution.findMany({
       where: { memberId: { in: memberIds } },
     })
-    allContributions = contribs.map((c) => ({
+    allContributions = contribs.map((c: any) => ({
       savings_amount: Number(c.savingsAmount),
       penalty_paid: Number(c.penaltyPaid),
       loan_repayment: Number(c.loanRepayment),
@@ -94,8 +94,8 @@ export default async function DashboardPage() {
   let totalCorpus = 0
 
   const finalizedMeetings = meetingsList
-    .filter((m) => m.status === "FINALIZED")
-    .sort((a, b) => new Date(b.meeting_date).getTime() - new Date(a.meeting_date).getTime())
+    .filter((m: any) => m.status === "FINALIZED")
+    .sort((a: any, b: any) => new Date(b.meeting_date).getTime() - new Date(a.meeting_date).getTime())
 
   if (finalizedMeetings.length > 0) {
     const latestMeeting = finalizedMeetings[0]
@@ -105,20 +105,20 @@ export default async function DashboardPage() {
     })
 
     const latestExps = exps
-      .filter((e) => e.meeting_id === latestMeeting.id)
-      .reduce((sum, e) => sum + e.amount, 0)
+      .filter((e: any) => e.meeting_id === latestMeeting.id)
+      .reduce((sum: number, e: any) => sum + e.amount, 0)
 
     const latestIncs = incs
-      .filter((i) => i.meeting_id === latestMeeting.id)
-      .reduce((sum, i) => sum + i.amount, 0)
+      .filter((i: any) => i.meeting_id === latestMeeting.id)
+      .reduce((sum: number, i: any) => sum + i.amount, 0)
 
     const latestLoans = loansList
-      .filter((l) => l.disbursed_date === latestMeeting.meeting_date && ["ACTIVE", "CLOSED"].includes(l.status))
-      .reduce((sum, l) => sum + l.loan_amount, 0)
+      .filter((l: any) => l.disbursed_date === latestMeeting.meeting_date && ["ACTIVE", "CLOSED"].includes(l.status))
+      .reduce((sum: number, l: any) => sum + l.loan_amount, 0)
 
     const totals = calcMeetingTotals({
       opening_balance: latestMeeting.opening_balance,
-      contributions: latestContribs.map((c) => ({
+      contributions: latestContribs.map((c: any) => ({
         savings_amount: Number(c.savingsAmount),
         loan_repayment: Number(c.loanRepayment),
         interest_paid: Number(c.interestPaid),
@@ -134,12 +134,12 @@ export default async function DashboardPage() {
     totalCorpus = totals.closing_balance
   }
 
-  const activeLoans = loansList.filter((l) => l.status === "ACTIVE")
-  const pendingLoans = loansList.filter((l) => l.status === "PENDING")
-  const totalOutstanding = activeLoans.reduce((sum, l) => sum + (l.outstanding_amount || 0), 0)
+  const activeLoans = loansList.filter((l: any) => l.status === "ACTIVE")
+  const pendingLoans = loansList.filter((l: any) => l.status === "PENDING")
+  const totalOutstanding = activeLoans.reduce((sum: number, l: any) => sum + (l.outstanding_amount || 0), 0)
 
   const currentMonth = getCurrentMonthYear()
-  const currentMeeting = meetingsList.find((m) => m.month_year === currentMonth)
+  const currentMeeting = meetingsList.find((m: any) => m.month_year === currentMonth)
   const pendingLoanCount = pendingLoans.length
 
   const todayStr = new Date().toISOString().split("T")[0]
@@ -151,17 +151,17 @@ export default async function DashboardPage() {
     select: { loanId: true, dueDate: true },
   })
 
-  const overdueEmiList = overdueEmis.map((e) => ({
+  const overdueEmiList = overdueEmis.map((e: any) => ({
     loan_id: e.loanId,
     due_date: e.dueDate.toISOString().split("T")[0],
   }))
 
   const overdueLoansList = activeLoans
-    .map((l) => {
-      const loanOverdues = overdueEmiList.filter((e) => e.loan_id === l.id)
+    .map((l: any) => {
+      const loanOverdues = overdueEmiList.filter((e: any) => e.loan_id === l.id)
       if (loanOverdues.length === 0) return null
 
-      const earliestDueDate = new Date(Math.min(...loanOverdues.map((e) => new Date(e.due_date).getTime())))
+      const earliestDueDate = new Date(Math.min(...loanOverdues.map((e: any) => new Date(e.due_date).getTime())))
       const daysOverdue = Math.floor((Date.now() - earliestDueDate.getTime()) / 86400000)
 
       return {
@@ -172,14 +172,14 @@ export default async function DashboardPage() {
     })
     .filter(Boolean) as (Loan & { member: Member; days_overdue: number; overdue_count: number })[]
 
-  const recentMeetings = meetingsList.slice(0, 5).map((m) => {
-    const mContribs = allContributions.filter((c) => c.meeting_id === m.id)
-    const mExps = exps.filter((e) => e.meeting_id === m.id).reduce((sum, e) => sum + e.amount, 0)
-    const mIncs = incs.filter((i) => i.meeting_id === m.id).reduce((sum, i) => sum + i.amount, 0)
+  const recentMeetings = meetingsList.slice(0, 5).map((m: any) => {
+    const mContribs = allContributions.filter((c: any) => c.meeting_id === m.id)
+    const mExps = exps.filter((e: any) => e.meeting_id === m.id).reduce((sum: number, e: any) => sum + e.amount, 0)
+    const mIncs = incs.filter((i: any) => i.meeting_id === m.id).reduce((sum: number, i: any) => sum + i.amount, 0)
 
     const mLoans = loansList
-      .filter((l) => l.disbursed_date === m.meeting_date && ["ACTIVE", "CLOSED"].includes(l.status))
-      .reduce((sum, l) => sum + l.loan_amount, 0)
+      .filter((l: any) => l.disbursed_date === m.meeting_date && ["ACTIVE", "CLOSED"].includes(l.status))
+      .reduce((sum: number, l: any) => sum + l.loan_amount, 0)
 
     const totals = calcMeetingTotals({
       opening_balance: m.opening_balance,

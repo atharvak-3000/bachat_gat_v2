@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import prisma from "@/lib/prisma"
+import prisma, { normalizePrismaObject } from "@/lib/prisma"
 import { requireAdminOrAbove, logActivity } from "@/lib/auth"
 import { calcMeetingTotals, getNextMonthStart, addP } from "@/lib/calculations"
 import { z } from "zod"
@@ -18,7 +18,8 @@ export async function GET(req: Request) {
       orderBy: { monthYear: "desc" },
     })
 
-    return NextResponse.json(meetings || [])
+    return NextResponse.json(normalizePrismaObject(meetings || []))
+
   } catch (error: any) {
     if (error?.message === "UNAUTHENTICATED" || error?.message === "UNAUTHORIZED" || error?.message === "FORBIDDEN") {
       return NextResponse.json({ error: error.message }, { status: error.message === "UNAUTHENTICATED" ? 401 : 403 })
@@ -79,7 +80,7 @@ export async function POST(req: Request) {
 
       const totals = calcMeetingTotals({
         opening_balance: Number(lastMeeting.openingBalance),
-        contributions: lastContribs.map((c) => ({
+        contributions: lastContribs.map((c: any) => ({
           savings_amount: Number(c.savingsAmount),
           loan_repayment: Number(c.loanRepayment),
           interest_paid: Number(c.interestPaid),
@@ -87,9 +88,9 @@ export async function POST(req: Request) {
           other_amount: Number(c.otherAmount),
           is_present: c.isPresent,
         })),
-        loans_issued_total: addP(...lastLoans.map((l) => Number(l.loanAmount))),
-        other_expenses_total: addP(...lastExpenses.map((e) => Number(e.amount))),
-        other_income_total: addP(...lastIncome.map((i) => Number(i.amount))),
+        loans_issued_total: addP(...lastLoans.map((l: any) => Number(l.loanAmount))),
+        other_expenses_total: addP(...lastExpenses.map((e: any) => Number(e.amount))),
+        other_income_total: addP(...lastIncome.map((i: any) => Number(i.amount))),
       })
 
       opening_balance_calculated = Math.max(0, totals.closing_balance)
@@ -112,7 +113,7 @@ export async function POST(req: Request) {
       select: { id: true },
     })
 
-    const newMeeting = await prisma.$transaction(async (tx) => {
+    const newMeeting = await prisma.$transaction(async (tx: any) => {
       const meeting = await tx.meeting.create({
         data: {
           organizationId: performer.organizationId,
@@ -126,7 +127,7 @@ export async function POST(req: Request) {
 
       if (activeMembers && activeMembers.length > 0) {
         await tx.meetingContribution.createMany({
-          data: activeMembers.map((m) => ({
+          data: activeMembers.map((m: any) => ({
             meetingId: meeting.id,
             memberId: m.id,
             savingsAmount: org.monthlySavingAmount,
@@ -147,7 +148,7 @@ export async function POST(req: Request) {
       return meeting
     })
 
-    return NextResponse.json(newMeeting)
+    return NextResponse.json(normalizePrismaObject(newMeeting))
   } catch (error: any) {
     if (error?.message === "UNAUTHENTICATED" || error?.message === "UNAUTHORIZED" || error?.message === "FORBIDDEN") {
       return NextResponse.json({ error: error.message }, { status: error.message === "UNAUTHENTICATED" ? 401 : 403 })

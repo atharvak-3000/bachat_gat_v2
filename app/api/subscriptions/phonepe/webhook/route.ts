@@ -57,7 +57,7 @@ export async function POST(req: Request) {
       const planDetails = PLANS[subscription.plan as keyof typeof PLANS]
       const maxMembers = planDetails ? planDetails.maxMembers : 10
 
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         await tx.subscription.update({
           where: { id: subscription.id },
           data: {

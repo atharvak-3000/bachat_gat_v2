@@ -18,7 +18,7 @@ export async function POST(_req: Request, context: { params: Promise<{ id: strin
     if (target.status !== "PENDING") return NextResponse.json({ error: "Member is not pending" }, { status: 400 })
     if (target.role !== "MEMBER") return NextResponse.json({ error: "Invalid role for approval" }, { status: 400 })
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       await tx.member.update({
         where: { id: target.id },
         data: { status: "ACTIVE", isActive: true },

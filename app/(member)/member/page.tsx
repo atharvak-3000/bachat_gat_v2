@@ -28,7 +28,7 @@ export default async function MemberPage() {
     }),
   ])
 
-  const memberContribs = contribs.map((c) => ({
+  const memberContribs = contribs.map((c: any) => ({
     ...c,
     meeting_id: c.meetingId,
     member_id: c.memberId,
@@ -48,7 +48,7 @@ export default async function MemberPage() {
     },
   })) as unknown as (MeetingContribution & { meeting: Meeting })[]
 
-  const memberLoans = loans.map((l) => ({
+  const memberLoans = loans.map((l: any) => ({
     ...l,
     organization_id: l.organizationId,
     member_id: l.memberId,
@@ -62,18 +62,18 @@ export default async function MemberPage() {
   })) as unknown as Loan[]
 
   const stats = calcMemberStats(
-    memberContribs.map((c) => ({
+    memberContribs.map((c: any) => ({
       savings_amount: c.savings_amount,
       interest_paid: c.interest_paid,
       is_present: c.is_present,
     })),
-    memberLoans.map((l) => ({
+    memberLoans.map((l: any) => ({
       outstanding_amount: l.outstanding_amount,
       status: l.status,
     }))
   )
 
-  const activeLoan = memberLoans.find((l) => l.status === "ACTIVE")
+  const activeLoan = memberLoans.find((l: any) => l.status === "ACTIVE")
   let nextEmi: LoanEmi | null = null
   let overdueEmiCount = 0
   let emiProgressPercent = 0
@@ -84,7 +84,7 @@ export default async function MemberPage() {
       orderBy: { monthYear: "asc" },
     })
 
-    const loanEmis = emis.map((e) => ({
+    const loanEmis = emis.map((e: any) => ({
       ...e,
       loan_id: e.loanId,
       month_year: e.monthYear,
@@ -99,10 +99,10 @@ export default async function MemberPage() {
 
     const todayStr = new Date().toISOString().split("T")[0]
 
-    nextEmi = loanEmis.find((e) => e.status !== "PAID") || null
+    nextEmi = loanEmis.find((e: any) => e.status !== "PAID") || null
 
     overdueEmiCount = loanEmis.filter(
-      (e) => e.status === "OVERDUE" || (e.status !== "PAID" && e.due_date < todayStr)
+      (e: any) => e.status === "OVERDUE" || (e.status !== "PAID" && e.due_date < todayStr)
     ).length
 
     emiProgressPercent = Math.min(
@@ -116,7 +116,7 @@ export default async function MemberPage() {
     select: { id: true },
   })
 
-  const memberIds = orgMembers.map((m) => m.id)
+  const memberIds = orgMembers.map((m: any) => m.id)
 
   let orgSavings = 0
   let orgInterest = 0
@@ -128,9 +128,9 @@ export default async function MemberPage() {
       select: { savingsAmount: true, interestPaid: true, penaltyPaid: true },
     })
 
-    orgSavings = orgContribs.reduce((sum, c) => sum + Number(c.savingsAmount), 0)
-    orgInterest = orgContribs.reduce((sum, c) => sum + Number(c.interestPaid), 0)
-    orgFines = orgContribs.reduce((sum, c) => sum + Number(c.penaltyPaid), 0)
+    orgSavings = orgContribs.reduce((sum: number, c: any) => sum + Number(c.savingsAmount), 0)
+    orgInterest = orgContribs.reduce((sum: number, c: any) => sum + Number(c.interestPaid), 0)
+    orgFines = orgContribs.reduce((sum: number, c: any) => sum + Number(c.penaltyPaid), 0)
   }
 
   const activeOrgLoans = await prisma.loan.findMany({
@@ -141,7 +141,7 @@ export default async function MemberPage() {
     select: { outstandingAmount: true },
   })
 
-  const orgLoansOut = activeOrgLoans.reduce((sum, l) => sum + Number(l.outstandingAmount), 0)
+  const orgLoansOut = activeOrgLoans.reduce((sum: number, l: any) => sum + Number(l.outstandingAmount), 0)
 
   const sortedContributions = [...memberContribs]
     .sort((a, b) => new Date(b.meeting.meeting_date).getTime() - new Date(a.meeting.meeting_date).getTime())

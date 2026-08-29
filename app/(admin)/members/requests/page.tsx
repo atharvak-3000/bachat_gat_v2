@@ -24,7 +24,7 @@ export default async function MemberRequestsPage() {
     orderBy: { createdAt: "desc" },
   })
 
-  const rows = pending.map((m) => ({
+  const rows = pending.map((m: any) => ({
     ...m,
     created_at: m.createdAt.toISOString(),
   }))
@@ -45,7 +45,7 @@ export default async function MemberRequestsPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((m) => (
+            {rows.map((m: any) => (
               <tr key={m.id} className="border-b">
                 <td className="p-2">{m.name}</td>
                 <td className="p-2">{m.phone}</td>

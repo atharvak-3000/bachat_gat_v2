@@ -30,7 +30,7 @@ export async function POST(
       return NextResponse.json({ error: "Proof is not pending" }, { status: 400 })
     }
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       await tx.paymentProof.update({
         where: { id: params.id },
         data: {

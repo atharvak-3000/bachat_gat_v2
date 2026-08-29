@@ -12,6 +12,7 @@ import {
   Star, 
   ChevronRight
 } from "lucide-react"
+import Link from "next/link"
 import DarkModeToggle from "@/components/ui/DarkModeToggle"
 
 interface LandingClientProps {
@@ -305,6 +306,10 @@ export default function LandingClient({ isAuthenticated, role, status }: Landing
             <a href="#how-it-works" className="text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition-colors">{t.howItWorks}</a>
             <a href="#testimonials" className="text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition-colors">{t.testimonials}</a>
             <a href="#pricing" className="text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition-colors">{t.pricing}</a>
+            <Link href="/docs" className="text-sm font-semibold text-[#E8530A] dark:text-orange-400 hover:underline flex items-center gap-1">
+              <span>📖</span>
+              <span>{lang === "mr" ? "नियमावली (Docs)" : "User Guide"}</span>
+            </Link>
             
             {/* Translator Toggle */}
             <button

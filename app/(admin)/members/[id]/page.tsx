@@ -47,7 +47,7 @@ export default async function MemberDetailPage({ params }: { params: Promise<{ i
 
   const safeMember = toSafeMember(member)
 
-  const guaranteedList = guaranteedLoans.map((gl) => ({
+  const guaranteedList = guaranteedLoans.map((gl: any) => ({
     ...gl,
     organization_id: gl.organizationId,
     member_id: gl.memberId,
@@ -66,22 +66,22 @@ export default async function MemberDetailPage({ params }: { params: Promise<{ i
   const todayStr = new Date().toISOString().split("T")[0]
 
   if (guaranteedList.length > 0) {
-    const loanIds = guaranteedList.map((l) => l.id)
+    const loanIds = guaranteedList.map((l: any) => l.id)
     const emis = await prisma.loanEmi.findMany({
       where: { loanId: { in: loanIds } },
       select: { loanId: true, status: true, dueDate: true },
     })
 
-    const emisList = emis.map((e) => ({
+    const emisList = emis.map((e: any) => ({
       loan_id: e.loanId,
       status: e.status,
       due_date: e.dueDate.toISOString().split("T")[0],
     }))
 
-    guaranteedList.forEach((l) => {
-      const loanEmis = emisList.filter((e) => e.loan_id === l.id)
+    guaranteedList.forEach((l: any) => {
+      const loanEmis = emisList.filter((e: any) => e.loan_id === l.id)
       const isOverdue = loanEmis.some(
-        (e) => e.status === "OVERDUE" || (e.status !== "PAID" && e.due_date < todayStr)
+        (e: any) => e.status === "OVERDUE" || (e.status !== "PAID" && e.due_date < todayStr)
       )
       l.is_overdue = isOverdue
       if (isOverdue && l.status === "ACTIVE") {
@@ -91,18 +91,18 @@ export default async function MemberDetailPage({ params }: { params: Promise<{ i
   }
 
   const stats = calcMemberStats(
-    contributions.map((c) => ({
+    contributions.map((c: any) => ({
       savings_amount: Number(c.savingsAmount),
       interest_paid: Number(c.interestPaid),
       is_present: c.isPresent,
     })),
-    loans.map((l) => ({
+    loans.map((l: any) => ({
       outstanding_amount: Number(l.outstandingAmount),
       status: l.status as any,
     }))
   )
 
-  const activeGuaranteedCount = guaranteedList.filter((l) => ["ACTIVE", "PENDING"].includes(l.status)).length
+  const activeGuaranteedCount = guaranteedList.filter((l: any) => ["ACTIVE", "PENDING"].includes(l.status)).length
 
   return (
     <MemberDetailClient

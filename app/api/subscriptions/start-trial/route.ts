@@ -27,7 +27,7 @@ export async function POST(req: Request) {
 
     const amount = plan === "BASIC" ? 15000 : plan === "STANDARD" ? 25000 : 50000
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       await tx.organization.update({
         where: { id: member.organizationId },
         data: {

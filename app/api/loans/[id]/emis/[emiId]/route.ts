@@ -42,7 +42,7 @@ export async function PATCH(
       return NextResponse.json({ error: "EMI record not found" }, { status: 404 })
     }
 
-    const updatedResult = await prisma.$transaction(async (tx) => {
+    const updatedResult = await prisma.$transaction(async (tx: any) => {
       const updatedPrincipalPaid = emi.principalPaid + pPaid
       const updatedInterestPaid = emi.interestPaid + iPaid
       const isFullyPaid = updatedPrincipalPaid >= emi.principalDue && updatedInterestPaid >= emi.interestDue
@@ -65,7 +65,7 @@ export async function PATCH(
         select: { status: true },
       })
 
-      const allPaid = allEmis.every((e) => e.status === "PAID")
+      const allPaid = allEmis.every((e: any) => e.status === "PAID")
       const isClosed = newOutstanding === BigInt(0) || allPaid
 
       await tx.loan.update({

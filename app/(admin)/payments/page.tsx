@@ -20,7 +20,7 @@ export default async function AdminPaymentsPage() {
     orderBy: { createdAt: "desc" },
   })
 
-  const safeProofs = proofs.map((p) => ({
+  const safeProofs = proofs.map((p: any) => ({
     ...p,
     organization_id: p.organizationId,
     member_id: p.memberId,

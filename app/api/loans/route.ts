@@ -25,7 +25,7 @@ export async function GET(req: Request) {
       orderBy: { createdAt: "desc" },
     })
 
-    const safeLoans = loans.map((l) => ({
+    const safeLoans = loans.map((l: any) => ({
       ...l,
       member: toSafeMember(l.member),
     }))
@@ -102,7 +102,7 @@ export async function POST(req: Request) {
     const status = performer.role === "SUPERADMIN" ? "ACTIVE" : "PENDING"
     const finalInterestRate = interest_rate ?? 2.0
 
-    const loan = await prisma.$transaction(async (tx) => {
+    const loan = await prisma.$transaction(async (tx: any) => {
       const createdLoan = await tx.loan.create({
         data: {
           organizationId: performer.organizationId,
@@ -124,7 +124,7 @@ export async function POST(req: Request) {
         const emis = calcEmiSchedule(amount, finalInterestRate, term_months, new Date())
 
         await tx.loanEmi.createMany({
-          data: emis.map((e) => ({
+          data: emis.map((e: any) => ({
             loanId: createdLoan.id,
             monthYear: e.month_year,
             dueDate: new Date(e.due_date),
@@ -147,7 +147,7 @@ export async function POST(req: Request) {
 
         if (superadmins.length > 0) {
           await tx.notification.createMany({
-            data: superadmins.map((admin) => ({
+            data: superadmins.map((admin: any) => ({
               memberId: admin.id,
               organizationId: performer.organizationId,
               title: "New Loan Request Awaiting Approval",

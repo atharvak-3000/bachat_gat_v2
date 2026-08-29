@@ -42,17 +42,17 @@ export default async function AdminLoansPage({
   const todayStr = new Date().toISOString().split("T")[0]
 
   const overdueCountMap: Record<string, number> = {}
-  loans.forEach((l) => {
-    const loanEmis = emis.filter((e) => e.loanId === l.id)
+  loans.forEach((l: any) => {
+    const loanEmis = emis.filter((e: any) => e.loanId === l.id)
     const overdueCount = loanEmis.filter(
-      (e) => e.status === "OVERDUE" || (e.status !== "PAID" && e.dueDate.toISOString().split("T")[0] < todayStr)
+      (e: any) => e.status === "OVERDUE" || (e.status !== "PAID" && e.dueDate.toISOString().split("T")[0] < todayStr)
     ).length
     overdueCountMap[l.id] = overdueCount
   })
 
-  const safeMembers = members.map((m) => toSafeMember(m))
+  const safeMembers = members.map((m: any) => toSafeMember(m))
 
-  const loansWithOverdue = loans.map((l) => ({
+  const loansWithOverdue = loans.map((l: any) => ({
     ...l,
     organization_id: l.organizationId,
     member_id: l.memberId,

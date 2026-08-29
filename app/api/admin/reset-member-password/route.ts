@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
 
     const passwordHash = await bcrypt.hash(passwordToUse, 10)
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       await tx.member.update({
         where: { id: targetMember.id },
         data: {
