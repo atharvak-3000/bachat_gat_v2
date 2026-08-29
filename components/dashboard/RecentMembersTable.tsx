@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
 
@@ -18,6 +18,18 @@ export default function RecentMembersTable({
   groupCode: string 
 }) {
   const [copied, setCopied] = useState(false)
+  const [lang, setLang] = useState<'mr'|'en'>('mr')
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setLang((localStorage.getItem('bb_lang') as 'mr'|'en') || 'mr')
+    }
+    const handler = (e: Event) => {
+      setLang((e as CustomEvent).detail)
+    }
+    window.addEventListener('bb-lang-change', handler)
+    return () => window.removeEventListener('bb-lang-change', handler)
+  }, [])
 
   const handleCopyLink = () => {
     const link = `${window.location.origin}/join?code=${groupCode}`
@@ -47,10 +59,11 @@ export default function RecentMembersTable({
   }
 
   const getRoleBadge = (role: string) => {
-    if (role === 'SUPERADMIN') return <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 border border-purple-200">SuperAdmin</span>
-    if (role === 'SUPERADMIN') return <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">Admin</span>
-    return <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">Member</span>
+    if (role === 'SUPERADMIN') return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 border border-purple-200">{lang === 'mr' ? 'महाअध्यक्ष' : 'SuperAdmin'}</span>
+    if (role === 'ADMIN') return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200">{lang === 'mr' ? 'अध्यक्ष' : 'Admin'}</span>
+    return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200">{lang === 'mr' ? 'सदस्य' : 'Member'}</span>
   }
+
 
   const getStatusBadge = (status: string | null) => {
     if (status === 'ACTIVE' || !status) return <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Active</span>

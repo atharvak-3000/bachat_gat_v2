@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import AddMemberForm from "@/components/members/AddMemberForm"
@@ -8,9 +8,10 @@ import type { Member, Organization } from "@/types"
 
 type MemberWithOrg = Member & { organization: Organization }
 
-const roleBadge: Record<string, { label: string; className: string }> = {
-  SUPERADMIN: { label: "महाअध्यक्ष", className: "bg-purple-100 text-purple-700 border border-purple-200" },
-  MEMBER:     { label: "सदस्य", className: "bg-gray-100 text-gray-600 border border-gray-200" },
+const roleBadge: Record<string, { labelMr: string; labelEn: string; className: string }> = {
+  SUPERADMIN: { labelMr: "महाअध्यक्ष", labelEn: "SuperAdmin", className: "bg-purple-100 text-purple-700 border border-purple-200" },
+  ADMIN:      { labelMr: "अध्यक्ष", labelEn: "Admin", className: "bg-blue-100 text-blue-700 border border-blue-200" },
+  MEMBER:     { labelMr: "सदस्य", labelEn: "Member", className: "bg-gray-100 text-gray-600 border border-gray-200" },
 }
 
 interface Props {
@@ -23,6 +24,19 @@ export default function MembersClient({ members, currentMember, inviteLink }: Pr
   const router = useRouter()
   const [showAddForm, setShowAddForm] = useState(false)
   const [loadingId, setLoadingId] = useState<string | null>(null)
+  const [lang, setLang] = useState<'mr'|'en'>('mr')
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setLang((localStorage.getItem('bb_lang') as 'mr'|'en') || 'mr')
+    }
+    const handler = (e: Event) => {
+      setLang((e as CustomEvent).detail)
+    }
+    window.addEventListener('bb-lang-change', handler)
+    return () => window.removeEventListener('bb-lang-change', handler)
+  }, [])
+
 
   const copyInviteLink = () => {
     navigator.clipboard.writeText(inviteLink)
@@ -121,7 +135,9 @@ export default function MembersClient({ members, currentMember, inviteLink }: Pr
                   </td>
                   <td className="px-6 py-4 text-gray-600">{m.phone}</td>
                   <td className="px-6 py-4">
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${badge.className}`}>{badge.label}</span>
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${badge.className}`}>
+                      {lang === 'mr' ? badge.labelMr : badge.labelEn}
+                    </span>
                   </td>
                   <td className="px-6 py-4">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${

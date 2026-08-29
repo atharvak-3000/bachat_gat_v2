@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import type { MemberWithOrg } from "@/types"
@@ -9,13 +10,29 @@ import DarkModeToggle from "../ui/DarkModeToggle"
 export default function Sidebar({ member, pendingCount = 0 }: { member: MemberWithOrg; pendingCount?: number }) {
   const pathname = usePathname()
   const router = useRouter()
+  const [lang, setLang] = useState<'mr'|'en'>('mr')
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setLang((localStorage.getItem('bb_lang') as 'mr'|'en') || 'mr')
+    }
+    const handler = (e: Event) => {
+      setLang((e as CustomEvent).detail)
+    }
+    window.addEventListener('bb-lang-change', handler)
+    return () => window.removeEventListener('bb-lang-change', handler)
+  }, [])
+
+  const roleText = lang === 'mr'
+    ? (member.role === 'SUPERADMIN' ? 'महाअध्यक्ष' : member.role === 'ADMIN' ? 'अध्यक्ष' : 'सदस्य')
+    : (member.role === 'SUPERADMIN' ? 'SuperAdmin' : member.role === 'ADMIN' ? 'Admin' : 'Member')
 
   const navItems = [
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/members", label: `Members${pendingCount > 0 ? ` (${pendingCount})` : ""}` },
-    { href: "/meetings", label: "Meetings" },
-    { href: "/loans", label: "Loans" },
-    { href: "/reports", label: "Reports" },
+    { href: "/dashboard", label: lang === 'mr' ? 'डॅशबोर्ड' : 'Dashboard' },
+    { href: "/members", label: `${lang === 'mr' ? 'सदस्य' : 'Members'}${pendingCount > 0 ? ` (${pendingCount})` : ""}` },
+    { href: "/meetings", label: lang === 'mr' ? 'सभा' : 'Meetings' },
+    { href: "/loans", label: lang === 'mr' ? 'कर्ज' : 'Loans' },
+    { href: "/reports", label: lang === 'mr' ? 'अहवाल' : 'Reports' },
   ]
 
   const signOut = async () => {
@@ -28,7 +45,7 @@ export default function Sidebar({ member, pendingCount = 0 }: { member: MemberWi
       <div className="mb-6 flex justify-between items-start">
         <div>
           <p className="font-bold text-white text-base truncate max-w-[150px]">{member.organization.name}</p>
-          <p className="text-xs text-blue-200 mt-0.5">{member.role}</p>
+          <p className="text-xs text-blue-200 mt-0.5">{roleText}</p>
         </div>
         <NotificationBell />
       </div>

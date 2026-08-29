@@ -295,7 +295,9 @@ export default function MemberDetailClient({
                 <span>{t.resetPwdBtn}</span>
               </button>
             )}
-            <span className="px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 border border-orange-100">{member.role}</span>
+            <span className="px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 border border-orange-100 font-semibold">
+              {lang === 'mr' ? (member.role === 'SUPERADMIN' ? 'महाअध्यक्ष' : member.role === 'ADMIN' ? 'अध्यक्ष' : 'सदस्य') : (member.role === 'SUPERADMIN' ? 'SuperAdmin' : member.role === 'ADMIN' ? 'Admin' : 'Member')}
+            </span>
             <span className={`px-3 py-1.5 rounded-full border ${member.status === 'ACTIVE' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>{member.status}</span>
           </div>
           <span className="px-3 py-1.5 rounded-full bg-gray-50 text-gray-600 border border-gray-100">
