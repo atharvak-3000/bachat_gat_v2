@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { requireAdminOrAbove, toSafeMember } from "@/lib/auth"
-import prisma from "@/lib/prisma"
-import type { ActivityLog, Member, Meeting, Loan, LoanEmi } from "@/types"
+import prisma, { normalizePrismaObject } from "@/lib/prisma"
+import type { ActivityLog, Member, Meeting, Loan } from "@/types"
 import { getCurrentMonthYear, calcMeetingTotals } from "@/lib/calculations"
 import DashboardClient from "./DashboardClient"
 
@@ -35,50 +35,36 @@ export default async function DashboardPage() {
     prisma.meetingIncome.findMany(),
   ])
 
-  const safeMembersList = allMembers.map((m: any) => toSafeMember(m)) as unknown as Member[]
-  const meetingsList = meetings.map((m: any) => ({
+  const normalizedMembers = normalizePrismaObject(allMembers)
+  const safeMembersList = normalizedMembers.map((m: any) => toSafeMember(m)) as unknown as Member[]
+  
+  const meetingsList = (normalizePrismaObject(meetings) || []).map((m: any) => ({
     ...m,
-    organization_id: m.organizationId,
-    month_year: m.monthYear,
-    meeting_date: m.meetingDate.toISOString().split("T")[0],
-    opening_balance: Number(m.openingBalance),
-    created_at: m.createdAt.toISOString(),
+    meeting_date: typeof m.meeting_date === 'string' ? m.meeting_date.split("T")[0] : new Date(m.meeting_date).toISOString().split("T")[0],
   })) as unknown as Meeting[]
 
-  const loansList = loans.map((l: any) => ({
+  const loansList = (normalizePrismaObject(loans) || []).map((l: any) => ({
     ...l,
-    organization_id: l.organizationId,
-    member_id: l.memberId,
-    loan_amount: Number(l.loanAmount),
-    outstanding_amount: Number(l.outstandingAmount),
-    interest_rate: Number(l.interestRate),
-    disbursed_date: l.disbursedDate.toISOString().split("T")[0],
-    term_months: l.termMonths,
-    created_at: l.createdAt.toISOString(),
+    disbursed_date: typeof l.disbursed_date === 'string' ? l.disbursed_date.split("T")[0] : new Date(l.disbursed_date).toISOString().split("T")[0],
     member: toSafeMember(l.member),
   })) as unknown as (Loan & { member: Member })[]
 
-  const logsList = recentLogs.map((log: any) => ({
-    ...log,
-    organization_id: log.organizationId,
-    performed_by: log.performedBy,
-    entity_type: log.entityType,
-    entity_id: log.entityId,
-    created_at: log.createdAt.toISOString(),
-  })) as unknown as ActivityLog[]
+  const logsList = normalizePrismaObject(recentLogs) as unknown as ActivityLog[]
 
-  const activeMembers = safeMembersList.filter((m: any) => m.status === "ACTIVE" && m.is_active)
+  const activeMembers = safeMembersList.filter((m: any) => 
+    (m.status === "ACTIVE" || !m.status) && (m.is_active !== false && m.isActive !== false)
+  )
   const pendingMembers = safeMembersList.filter((m: any) => m.status === "PENDING")
 
   const exps = expenses.map((e: any) => ({ meeting_id: e.meetingId, amount: Number(e.amount) }))
   const incs = incomes.map((i: any) => ({ meeting_id: i.meetingId, amount: Number(i.amount) }))
 
-  const memberIds = activeMembers.map((m: any) => m.id)
+  const meetingIds = meetingsList.map((m: any) => m.id)
   let allContributions: any[] = []
 
-  if (memberIds.length > 0) {
+  if (meetingIds.length > 0) {
     const contribs = await prisma.meetingContribution.findMany({
-      where: { memberId: { in: memberIds } },
+      where: { meetingId: { in: meetingIds } },
     })
     allContributions = contribs.map((c: any) => ({
       savings_amount: Number(c.savingsAmount),
@@ -114,10 +100,10 @@ export default async function DashboardPage() {
 
     const latestLoans = loansList
       .filter((l: any) => l.disbursed_date === latestMeeting.meeting_date && ["ACTIVE", "CLOSED"].includes(l.status))
-      .reduce((sum: number, l: any) => sum + l.loan_amount, 0)
+      .reduce((sum: number, l: any) => sum + (l.loan_amount || 0), 0)
 
     const totals = calcMeetingTotals({
-      opening_balance: latestMeeting.opening_balance,
+      opening_balance: latestMeeting.opening_balance || 0,
       contributions: latestContribs.map((c: any) => ({
         savings_amount: Number(c.savingsAmount),
         loan_repayment: Number(c.loanRepayment),
@@ -139,7 +125,7 @@ export default async function DashboardPage() {
   const totalOutstanding = activeLoans.reduce((sum: number, l: any) => sum + (l.outstanding_amount || 0), 0)
 
   const currentMonth = getCurrentMonthYear()
-  const currentMeeting = meetingsList.find((m: any) => m.month_year === currentMonth)
+  const currentMeeting = meetingsList.find((m: any) => m.month_year === currentMonth || (m.month_year && m.month_year.startsWith(currentMonth)))
   const pendingLoanCount = pendingLoans.length
 
   const todayStr = new Date().toISOString().split("T")[0]
@@ -179,10 +165,10 @@ export default async function DashboardPage() {
 
     const mLoans = loansList
       .filter((l: any) => l.disbursed_date === m.meeting_date && ["ACTIVE", "CLOSED"].includes(l.status))
-      .reduce((sum: number, l: any) => sum + l.loan_amount, 0)
+      .reduce((sum: number, l: any) => sum + (l.loan_amount || 0), 0)
 
     const totals = calcMeetingTotals({
-      opening_balance: m.opening_balance,
+      opening_balance: m.opening_balance || 0,
       contributions: mContribs,
       loans_issued_total: mLoans,
       other_expenses_total: mExps,
@@ -195,6 +181,7 @@ export default async function DashboardPage() {
       closing_balance: totals.closing_balance,
     }
   })
+
 
   return (
     <DashboardClient
