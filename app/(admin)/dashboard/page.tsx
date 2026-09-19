@@ -20,7 +20,7 @@ export default async function DashboardPage() {
     }),
     prisma.meeting.findMany({
       where: { organizationId: performer.organization_id },
-      orderBy: { monthYear: "desc" },
+      orderBy: [{ meetingDate: "desc" }, { createdAt: "desc" }],
     }),
     prisma.loan.findMany({
       where: { organizationId: performer.organization_id },
@@ -31,8 +31,12 @@ export default async function DashboardPage() {
       orderBy: { createdAt: "desc" },
       take: 10,
     }),
-    prisma.meetingExpense.findMany(),
-    prisma.meetingIncome.findMany(),
+    prisma.meetingExpense.findMany({
+      where: { meeting: { organizationId: performer.organization_id } },
+    }),
+    prisma.meetingIncome.findMany({
+      where: { meeting: { organizationId: performer.organization_id } },
+    }),
   ])
 
   const normalizedMembers = normalizePrismaObject(allMembers)
@@ -79,12 +83,13 @@ export default async function DashboardPage() {
 
   let totalCorpus = 0
 
-  const finalizedMeetings = meetingsList
-    .filter((m: any) => m.status === "FINALIZED")
-    .sort((a: any, b: any) => new Date(b.meeting_date).getTime() - new Date(a.meeting_date).getTime())
+  const sortedMeetings = [...meetingsList].sort(
+    (a: any, b: any) => new Date(b.meeting_date).getTime() - new Date(a.meeting_date).getTime()
+  )
+  const finalizedMeetings = sortedMeetings.filter((m: any) => m.status === "FINALIZED")
 
-  if (finalizedMeetings.length > 0) {
-    const latestMeeting = finalizedMeetings[0]
+  if (sortedMeetings.length > 0) {
+    const latestMeeting = finalizedMeetings[0] || sortedMeetings[0]
 
     const latestContribs = await prisma.meetingContribution.findMany({
       where: { meetingId: latestMeeting.id },

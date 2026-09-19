@@ -170,14 +170,16 @@ export default function ReportsClient({
   // Wait, API has `api/meetings/[id]/loans-issued`. 
   // Let's just calculate loans disbursed in this month.
   if (selectedMeeting) {
-    const meetingDate = new Date(selectedMeeting.meeting_date)
-    const month = meetingDate.getMonth()
-    const year = meetingDate.getFullYear()
+    const mDateStr = typeof selectedMeeting.meeting_date === 'string' 
+      ? selectedMeeting.meeting_date.split('T')[0] 
+      : new Date(selectedMeeting.meeting_date).toISOString().split('T')[0]
     
     loans.forEach(l => {
       if (l.status === 'ACTIVE' || l.status === 'CLOSED') {
-        const dDate = new Date(l.disbursed_date)
-        if (dDate.getMonth() === month && dDate.getFullYear() === year) {
+        const dDateStr = typeof l.disbursed_date === 'string' 
+          ? l.disbursed_date.split('T')[0] 
+          : new Date(l.disbursed_date).toISOString().split('T')[0]
+        if (dDateStr === mDateStr) {
           loansIssued += l.loan_amount
         }
       }

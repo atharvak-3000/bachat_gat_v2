@@ -15,11 +15,17 @@ export default async function MeetingsPage() {
   const [meetings, contributions, expenses, income, loans] = await Promise.all([
     prisma.meeting.findMany({
       where: { organizationId: performer.organization_id },
-      orderBy: { monthYear: "desc" },
+      orderBy: [{ meetingDate: "desc" }, { createdAt: "desc" }],
     }),
-    prisma.meetingContribution.findMany(),
-    prisma.meetingExpense.findMany(),
-    prisma.meetingIncome.findMany(),
+    prisma.meetingContribution.findMany({
+      where: { meeting: { organizationId: performer.organization_id } },
+    }),
+    prisma.meetingExpense.findMany({
+      where: { meeting: { organizationId: performer.organization_id } },
+    }),
+    prisma.meetingIncome.findMany({
+      where: { meeting: { organizationId: performer.organization_id } },
+    }),
     prisma.loan.findMany({
       where: { organizationId: performer.organization_id },
     }),
@@ -68,6 +74,8 @@ export default async function MeetingsPage() {
       month_year: m.monthYear,
       meeting_date: meetingDateStr,
       opening_balance: Number(m.openingBalance),
+      closing_date: m.closingDate ? (typeof m.closingDate === 'string' ? m.closingDate.split('T')[0] : m.closingDate.toISOString().split('T')[0]) : null,
+      closingDate: m.closingDate ? (typeof m.closingDate === 'string' ? m.closingDate.split('T')[0] : m.closingDate.toISOString().split('T')[0]) : null,
       created_at: m.createdAt.toISOString(),
       totals,
     }

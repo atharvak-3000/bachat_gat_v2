@@ -63,11 +63,14 @@ export async function POST(
       return NextResponse.json({ error: "Negative closing balance — cannot finalize meeting" }, { status: 400 })
     }
 
+    const parsedClosingDate = closing_date ? new Date(closing_date) : new Date()
+
     const finalizedMeeting = await prisma.$transaction(async (tx: any) => {
       const updatedMeeting = await tx.meeting.update({
         where: { id },
         data: {
           status: "FINALIZED",
+          closingDate: parsedClosingDate,
         },
       })
 
@@ -95,12 +98,23 @@ export async function POST(
               },
             })
 
-            const emi = await tx.loanEmi.findFirst({
+            const meetingMonth = meeting.monthYear.substring(0, 7)
+            let emi = await tx.loanEmi.findFirst({
               where: {
                 loanId: activeLoan.id,
-                monthYear: meeting.monthYear,
+                monthYear: meetingMonth,
               },
             })
+
+            if (!emi) {
+              emi = await tx.loanEmi.findFirst({
+                where: {
+                  loanId: activeLoan.id,
+                  status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
+                },
+                orderBy: { dueDate: "asc" },
+              })
+            }
 
             if (emi) {
               const principal_paid = Number(emi.principalPaid) + repaymentRemaining

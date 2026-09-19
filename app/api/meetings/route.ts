@@ -15,7 +15,7 @@ export async function GET(req: Request) {
 
     const meetings = await prisma.meeting.findMany({
       where: { organizationId: performer.organizationId },
-      orderBy: { monthYear: "desc" },
+      orderBy: [{ meetingDate: "desc" }, { createdAt: "desc" }],
     })
 
     return NextResponse.json(normalizePrismaObject(meetings || []))
@@ -41,42 +41,63 @@ export async function POST(req: Request) {
 
     const { meeting_date, opening_balance } = parseResult.data
 
-    const meetingDate = new Date(meeting_date)
-    const month_year = `${meetingDate.getFullYear()}-${String(meetingDate.getMonth() + 1).padStart(2, "0")}-${Date.now()}`
+    // Check if there is an unfinalized (DRAFT) meeting in this Gat
+    const existingDraft = await prisma.meeting.findFirst({
+      where: {
+        organizationId: performer.organizationId,
+        status: "DRAFT",
+      },
+      orderBy: [{ meetingDate: "desc" }, { createdAt: "desc" }],
+    })
 
+    if (existingDraft) {
+      return NextResponse.json(
+        {
+          error: "PREVIOUS_MEETING_NOT_FINALIZED",
+          message: "मागील सभा अंतिम (Finalize) केल्याशिवाय नवीन सभा तयार करता येत नाही. कृपया आधी मागील सभा पूर्ण करा.",
+          meetingId: existingDraft.id,
+        },
+        { status: 400 }
+      )
+    }
+
+    const meetingDate = new Date(meeting_date)
+    const month_year = `${meetingDate.getFullYear()}-${String(meetingDate.getMonth() + 1).padStart(2, "0")}`
+
+    // Find the latest existing meeting for this organization (if any)
     const lastMeeting = await prisma.meeting.findFirst({
       where: {
         organizationId: performer.organizationId,
-        status: "FINALIZED",
       },
-      orderBy: { monthYear: "desc" },
+      orderBy: [{ meetingDate: "desc" }, { createdAt: "desc" }],
     })
 
-    let opening_balance_calculated = typeof opening_balance === "number" ? opening_balance : 0
+    let opening_balance_calculated = 0
 
     if (lastMeeting) {
-      const lastContribs = await prisma.meetingContribution.findMany({
-        where: { meetingId: lastMeeting.id },
-      })
-      const lastExpenses = await prisma.meetingExpense.findMany({
-        where: { meetingId: lastMeeting.id },
-      })
-      const lastIncome = await prisma.meetingIncome.findMany({
-        where: { meetingId: lastMeeting.id },
-      })
-
-      const nextMonthDate = new Date(getNextMonthStart(lastMeeting.meetingDate.toISOString().split("T")[0]))
-
-      const lastLoans = await prisma.loan.findMany({
-        where: {
-          organizationId: performer.organizationId,
-          disbursedDate: {
-            gte: lastMeeting.meetingDate,
-            lt: nextMonthDate,
+      // Automatically calculate and carry forward closing balance from previous meeting
+      const [lastContribs, lastExpenses, lastIncome, lastLoans] = await Promise.all([
+        prisma.meetingContribution.findMany({
+          where: { meetingId: lastMeeting.id },
+        }),
+        prisma.meetingExpense.findMany({
+          where: { meetingId: lastMeeting.id },
+        }),
+        prisma.meetingIncome.findMany({
+          where: { meetingId: lastMeeting.id },
+        }),
+        prisma.loan.findMany({
+          where: {
+            organizationId: performer.organizationId,
+            status: { in: ["ACTIVE", "CLOSED"] },
           },
-          status: { in: ["ACTIVE", "CLOSED"] },
-        },
-      })
+        }),
+      ])
+
+      const lastMeetingDateStr = lastMeeting.meetingDate.toISOString().split("T")[0]
+      const activeIssuedLoans = lastLoans.filter(
+        (l: any) => l.disbursedDate.toISOString().split("T")[0] === lastMeetingDateStr
+      )
 
       const totals = calcMeetingTotals({
         opening_balance: Number(lastMeeting.openingBalance),
@@ -88,12 +109,15 @@ export async function POST(req: Request) {
           other_amount: Number(c.otherAmount),
           is_present: c.isPresent,
         })),
-        loans_issued_total: addP(...lastLoans.map((l: any) => Number(l.loanAmount))),
+        loans_issued_total: addP(...activeIssuedLoans.map((l: any) => Number(l.loanAmount))),
         other_expenses_total: addP(...lastExpenses.map((e: any) => Number(e.amount))),
         other_income_total: addP(...lastIncome.map((i: any) => Number(i.amount))),
       })
 
-      opening_balance_calculated = Math.max(0, totals.closing_balance)
+      opening_balance_calculated = totals.closing_balance
+    } else {
+      // First meeting ever for this Gat - use the opening balance entered by admin
+      opening_balance_calculated = typeof opening_balance === "number" ? opening_balance : 0
     }
 
     const org = await prisma.organization.findUnique({

@@ -89,10 +89,10 @@ export function calcMeetingTotals(input: CalcMeetingInput): MeetingTotals {
 
 /**
  * Monthly interest on outstanding principal
- * Uses simple interest: principal × annualRate% / 12
+ * Uses monthly interest rate (e.g. 2% per month): principal × monthlyRate% / 100
  */
-export function calcMonthlyInterest(principalPaise: number, annualRatePercent: number): number {
-  return Math.round(principalPaise * annualRatePercent / 12 / 100)
+export function calcMonthlyInterest(principalPaise: number, monthlyRatePercent: number): number {
+  return Math.round((principalPaise * monthlyRatePercent) / 100)
 }
 
 /**
@@ -101,7 +101,7 @@ export function calcMonthlyInterest(principalPaise: number, annualRatePercent: n
  */
 export function calcEmiSchedule(
   loanAmountPaise: number,
-  annualRatePercent: number,
+  monthlyRatePercent: number,
   termMonths: number,
   startDate: Date
 ): Omit<LoanEmi, 'id' | 'loan_id'>[] {
@@ -110,12 +110,22 @@ export function calcEmiSchedule(
   // Equal principal installments
   const basePrincipal = Math.floor(loanAmountPaise / termMonths)
 
-  for (let i = 0; i < termMonths; i++) {
-    const dueDate = new Date(startDate)
-    dueDate.setMonth(dueDate.getMonth() + i + 1)
-    const my = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}`
+  const startYear = startDate.getFullYear()
+  const startMonth = startDate.getMonth()
+  const startDay = startDate.getDate()
 
-    const interest = calcMonthlyInterest(outstanding, annualRatePercent)
+  for (let i = 0; i < termMonths; i++) {
+    // Safely calculate target year and month avoiding month-end rollover
+    const targetMonthIndex = startMonth + i + 1
+    const targetYear = startYear + Math.floor(targetMonthIndex / 12)
+    const targetMonth = targetMonthIndex % 12
+    const daysInTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate()
+    const safeDay = Math.min(startDay, daysInTargetMonth)
+    const dueDate = new Date(targetYear, targetMonth, safeDay)
+
+    const my = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}`
+
+    const interest = calcMonthlyInterest(outstanding, monthlyRatePercent)
     // Last EMI gets remainder to avoid rounding drift
     const principal = i === termMonths - 1 ? outstanding : Math.min(basePrincipal, outstanding)
 

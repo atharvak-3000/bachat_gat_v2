@@ -58,7 +58,7 @@ export async function PATCH(
         },
       })
 
-      const newOutstanding = Number(loan.outstandingAmount - pPaid) < 0 ? BigInt(0) : loan.outstandingAmount - pPaid
+      const newOutstanding = loan.outstandingAmount > pPaid ? loan.outstandingAmount - pPaid : BigInt(0)
 
       const allEmis = await tx.loanEmi.findMany({
         where: { loanId: id },

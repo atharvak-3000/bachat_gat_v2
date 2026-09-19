@@ -89,11 +89,12 @@ model Meeting {
   organizationId String   @map("organization_id") @db.VarChar(36)
   meetingDate    DateTime @map("meeting_date") @db.Date
   monthYear      String   @map("month_year") @db.VarChar(30)
-  status         String   @default("DRAFT") @db.VarChar(20)
-  openingBalance BigInt   @default(0) @map("opening_balance")
-  notes          String?  @db.Text
-  createdBy      String?  @map("created_by") @db.VarChar(36)
-  createdAt      DateTime @default(now()) @map("created_at")
+  status         String    @default("DRAFT") @db.VarChar(20)
+  openingBalance BigInt    @default(0) @map("opening_balance")
+  closingDate    DateTime? @map("closing_date") @db.Date
+  notes          String?   @db.Text
+  createdBy      String?   @map("created_by") @db.VarChar(36)
+  createdAt      DateTime  @default(now()) @map("created_at")
 
   organization  Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   creator       Member?               @relation("MeetingCreator", fields: [createdBy], references: [id], onDelete: SetNull)

@@ -71,13 +71,21 @@ export default function MeetingsClient({ initialMeetings }: { initialMeetings: M
       view: "पहा",
       createMeetingTitle: "नवीन सभा तयार करा",
       meetingDateLabel: "सभेची तारीख",
-      openingBalanceLabel: "मागील शिल्लक (₹)",
+      openingBalanceLabel: "सुरुवातीची शिल्लक (₹)",
+      autoOpeningBalLabel: "मागील सभेची अखेरची शिल्लक (आपोआप)",
+      autoOpeningBalSub: "या सभेची सुरुवातीची शिल्लक मागील सभेच्या आजच्या शिलकीतून आपोआप घेतली जाईल.",
+      firstMeetingOpeningBalSub: "पहिल्या सभेसाठी गटाची सुरुवातीची शिल्लक प्रविष्ट करा.",
       amountPlaceholder: "₹ मध्ये रक्कम प्रविष्ट करा (उदा. ५०००)",
       cancel: "रद्द करा",
       creating: "तयार करत आहे...",
       createBtn: "सभा तयार करा",
       notSet: "निश्चित नाही",
       statusCol: "स्थिती",
+      pendingDraftWarningTitle: "मागील सभा अजून मसुदा (Draft) स्थितीत आहे",
+      pendingDraftWarningDesc: "नवीन सभा तयार करण्यापूर्वी कृपया मागील सभा पूर्ण व अंतिम (Finalize) करा.",
+      cannotCreateWhileDraftTitle: "मागील सभा अंतिम करणे आवश्यक आहे",
+      cannotCreateWhileDraftDesc: "नवीन सभा सुरू करण्यासाठी आधीची सभा अंतिम (Finalize) असणे आवश्यक आहे, जेणेकरून अचूक शिल्लक पुढे आणता येईल.",
+      goToDraftMeeting: "मागील सभेकडे जा →",
     },
     en: {
       title: "Meetings",
@@ -99,24 +107,41 @@ export default function MeetingsClient({ initialMeetings }: { initialMeetings: M
       createMeetingTitle: "Create New Meeting",
       meetingDateLabel: "Meeting Date",
       openingBalanceLabel: "Opening Balance (₹)",
+      autoOpeningBalLabel: "Previous Meeting Closing Balance (Auto)",
+      autoOpeningBalSub: "Opening balance will be automatically carried forward from the previous meeting's closing balance.",
+      firstMeetingOpeningBalSub: "Enter the initial starting balance for your first meeting.",
       amountPlaceholder: "Enter amount in ₹ (e.g. 5000)",
       cancel: "Cancel",
       creating: "Creating...",
       createBtn: "Create Meeting",
       notSet: "Not set",
       statusCol: "Status",
+      pendingDraftWarningTitle: "Previous meeting is still in Draft",
+      pendingDraftWarningDesc: "Please complete and finalize the previous meeting before creating a new one.",
+      cannotCreateWhileDraftTitle: "Previous Meeting Must Be Finalized",
+      cannotCreateWhileDraftDesc: "To start a new meeting and accurately carry forward the closing balance, the current draft meeting must be finalized first.",
+      goToDraftMeeting: "Go to Draft Meeting →",
     }
   }
   const t = T[lang]
+
+  const unfinalizedMeeting = meetings.find((m) => m.status === "DRAFT")
+  const hasPreviousMeeting = meetings.length > 0
+  const sortedMeetings = [...meetings].sort(
+    (a, b) => new Date(b.meeting_date).getTime() - new Date(a.meeting_date).getTime()
+  )
+  const previousMeeting = hasPreviousMeeting ? sortedMeetings[0] : null
+  const previousClosingBalance = previousMeeting?.totals?.closing_balance ?? 0
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
 
-    // Convert opening balance to paise
-    const balRupees = parseFloat(formData.opening_balance) || 0
-    const balPaise = toP(balRupees)
+    // For first meeting, use input; for next meetings, auto-use previous closing balance
+    const balPaise = hasPreviousMeeting
+      ? previousClosingBalance
+      : toP(parseFloat(formData.opening_balance) || 0)
 
     try {
       const res = await fetch("/api/meetings", {
@@ -171,6 +196,29 @@ export default function MeetingsClient({ initialMeetings }: { initialMeetings: M
           {t.newMeeting}
         </button>
       </div>
+
+      {/* Pending Draft Meeting Warning Banner */}
+      {unfinalizedMeeting && (
+        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">⚠️</span>
+            <div>
+              <p className="font-bold text-amber-900 dark:text-amber-300 text-sm">
+                {t.pendingDraftWarningTitle}
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                {t.pendingDraftWarningDesc}
+              </p>
+            </div>
+          </div>
+          <Link
+            href={`/meetings/${unfinalizedMeeting.id}`}
+            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow transition active:scale-95 shrink-0 flex items-center gap-1.5"
+          >
+            <span>{t.goToDraftMeeting}</span>
+          </Link>
+        </div>
+      )}
 
       {/* Meetings Table or Empty State */}
       {meetings.length === 0 ? (
@@ -241,6 +289,19 @@ export default function MeetingsClient({ initialMeetings }: { initialMeetings: M
                   </div>
                 </div>
 
+                {m.closing_date && (
+                  <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-3 flex items-center justify-between px-1">
+                    <span>{t.closingDate}:</span>
+                    <span className="font-semibold text-gray-700 dark:text-gray-300">
+                      {new Date(m.closing_date).toLocaleDateString(lang === 'mr' ? 'mr-IN' : 'en-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric'
+                      })}
+                    </span>
+                  </div>
+                )}
+
                 {/* Action */}
                 <Link
                   href={`/meetings/${m.id}`}
@@ -302,10 +363,21 @@ export default function MeetingsClient({ initialMeetings }: { initialMeetings: M
                       {formatRupees(m.totals.closing_balance)}
                     </td>
                     <td className="px-6 py-4 text-gray-600 dark:text-gray-300 font-medium">
-                      {m.closing_date 
-                        ? new Date(m.closing_date).toLocaleDateString('en-IN')
-                        : m.status === 'DRAFT' ? '—' : t.notSet
-                      }
+                      {m.closing_date ? (
+                        <span className="inline-flex items-center gap-1.5 text-gray-700 dark:text-gray-200">
+                          {new Date(m.closing_date).toLocaleDateString(lang === 'mr' ? 'mr-IN' : 'en-IN', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })}
+                        </span>
+                      ) : m.status === 'DRAFT' ? (
+                        <span className="text-amber-600 dark:text-amber-400 font-medium text-xs">
+                          —
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">{t.notSet}</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-right">
                       {m.status === 'DRAFT' ? (
@@ -336,74 +408,123 @@ export default function MeetingsClient({ initialMeetings }: { initialMeetings: M
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden p-6 animate-scaleUp max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100 dark:border-gray-800">
-              <h2 className="text-xl font-bold text-[#1B2B6B] dark:text-white">{t.createMeetingTitle}</h2>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-[#1B2B6B] dark:text-white">
+                {t.createMeetingTitle}
+              </h2>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 p-1.5 rounded-xl transition"
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl font-bold p-1"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-                </svg>
+                ✕
               </button>
             </div>
 
-            {error && (
-              <div className="bg-red-50 dark:bg-red-950/20 border border-red-200/50 dark:border-red-900/30 text-red-600 dark:text-red-400 rounded-xl p-3.5 mb-5 text-sm flex gap-2 items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 flex-shrink-0">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
-                </svg>
-                <span className="font-medium">{error}</span>
+            {unfinalizedMeeting ? (
+              <div className="space-y-4">
+                <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-2xl space-y-2 text-center">
+                  <span className="text-3xl">⚠️</span>
+                  <p className="font-bold text-sm text-amber-900 dark:text-amber-300">
+                    {t.cannotCreateWhileDraftTitle}
+                  </p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+                    {t.cannotCreateWhileDraftDesc}
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300 font-semibold p-3 rounded-xl transition text-sm text-center"
+                  >
+                    {t.cancel}
+                  </button>
+                  <Link
+                    href={`/meetings/${unfinalizedMeeting.id}`}
+                    className="flex-1 bg-[#E85D26] hover:bg-[#D04E1A] text-white font-semibold p-3 rounded-xl transition text-sm text-center shadow-md flex items-center justify-center gap-1.5"
+                  >
+                    {t.goToDraftMeeting}
+                  </Link>
+                </div>
               </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {error && (
+                  <div className="bg-red-50 dark:bg-red-950/20 border border-red-200/50 dark:border-red-900/30 text-red-600 dark:text-red-400 rounded-xl p-3.5 mb-5 text-sm flex gap-2 items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 flex-shrink-0">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+                    </svg>
+                    <span className="font-medium">{error}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    {t.meetingDateLabel}
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={formData.meeting_date}
+                    onChange={(e) => setFormData({ ...formData, meeting_date: e.target.value })}
+                    className="w-full border border-gray-200 dark:border-gray-800 rounded-xl p-3 text-sm focus:border-[#E85D26] focus:ring-1 focus:ring-[#E85D26] outline-none transition dark:bg-gray-950 dark:text-white"
+                  />
+                </div>
+
+                {hasPreviousMeeting ? (
+                  <div className="bg-orange-50/60 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900/40 rounded-xl p-3.5 space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-gray-600 dark:text-gray-300">
+                        {t.autoOpeningBalLabel}
+                      </span>
+                      <span className="text-base font-black text-orange-600 dark:text-orange-400">
+                        {formatRupees(previousClosingBalance)}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                      {t.autoOpeningBalSub}
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                      {t.openingBalanceLabel}
+                    </label>
+                    <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-2">
+                      {t.firstMeetingOpeningBalSub}
+                    </p>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      required
+                      placeholder={t.amountPlaceholder}
+                      value={formData.opening_balance}
+                      onChange={(e) => setFormData({ ...formData, opening_balance: e.target.value })}
+                      className="w-full border border-gray-200 dark:border-gray-800 rounded-xl p-3 text-sm focus:border-[#E85D26] focus:ring-1 focus:ring-[#E85D26] outline-none transition dark:bg-gray-950 dark:text-white"
+                    />
+                  </div>
+                )}
+
+                <div className="pt-4 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300 font-semibold p-3 rounded-xl transition text-sm text-center"
+                  >
+                    {t.cancel}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="flex-1 bg-[#E85D26] hover:bg-[#D04E1A] text-white font-semibold p-3 rounded-xl transition text-sm disabled:opacity-50"
+                  >
+                    {loading ? t.creating : t.createBtn}
+                  </button>
+                </div>
+              </form>
             )}
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                  {t.meetingDateLabel}
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={formData.meeting_date}
-                  onChange={(e) => setFormData({ ...formData, meeting_date: e.target.value })}
-                  className="w-full border border-gray-200 dark:border-gray-800 rounded-xl p-3 text-sm focus:border-[#E85D26] focus:ring-1 focus:ring-[#E85D26] outline-none transition dark:bg-gray-950 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                  {t.openingBalanceLabel}
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  required
-                  placeholder={t.amountPlaceholder}
-                  value={formData.opening_balance}
-                  onChange={(e) => setFormData({ ...formData, opening_balance: e.target.value })}
-                  className="w-full border border-gray-200 dark:border-gray-800 rounded-xl p-3 text-sm focus:border-[#E85D26] focus:ring-1 focus:ring-[#E85D26] outline-none transition dark:bg-gray-950 dark:text-white"
-                />
-              </div>
-
-              <div className="pt-4 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300 font-semibold p-3 rounded-xl transition text-sm text-center"
-                >
-                  {t.cancel}
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex-1 bg-[#E85D26] hover:bg-[#D04E1A] text-white font-semibold p-3 rounded-xl transition text-sm disabled:opacity-50"
-                >
-                  {loading ? t.creating : t.createBtn}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
