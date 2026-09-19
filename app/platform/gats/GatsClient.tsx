@@ -47,7 +47,6 @@ export default function GatsClient({ initialOrgs }: { initialOrgs: any[] }) {
                 <th className="px-6 py-3 font-medium text-gray-500">Name / Code</th>
                 <th className="px-6 py-3 font-medium text-gray-500">Location</th>
                 <th className="px-6 py-3 font-medium text-gray-500">Members</th>
-                <th className="px-6 py-3 font-medium text-gray-500">Plan</th>
                 <th className="px-6 py-3 font-medium text-gray-500">Status</th>
                 <th className="px-6 py-3 font-medium text-gray-500">Actions</th>
               </tr>
@@ -65,11 +64,6 @@ export default function GatsClient({ initialOrgs }: { initialOrgs: any[] }) {
                   </td>
                   <td className="px-6 py-4 font-medium text-gray-900">
                     {org.members_count}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-md text-xs font-medium">
-                      {org.subscription_plan}
-                    </span>
                   </td>
                   <td className="px-6 py-4">
                     {org.is_approved ? (

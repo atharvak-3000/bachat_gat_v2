@@ -52,37 +52,6 @@ export async function POST(req: Request) {
 
     const { name, name_marathi, phone, password, address, joining_date } = parseResult.data
 
-    // Check organization active member limits if subscription is ACTIVE or TRIAL
-    const org = await prisma.organization.findUnique({
-      where: { id: performer.organizationId },
-    })
-
-    if (!org) {
-      return NextResponse.json({ error: "Organization not found" }, { status: 404 })
-    }
-
-    if (org.subscriptionStatus === "ACTIVE" || org.subscriptionStatus === "TRIAL") {
-      const activeMembers = await prisma.member.count({
-        where: {
-          organizationId: performer.organizationId,
-          status: "ACTIVE",
-        },
-      })
-
-      const maxMembers = org.maxMembers || 10
-      if (activeMembers >= maxMembers) {
-        return NextResponse.json(
-          {
-            error: "MEMBER_LIMIT_REACHED",
-            message: "You have reached your plan limit. Please upgrade your subscription.",
-            currentPlan: org.subscriptionPlan || "BASIC",
-            maxMembers: maxMembers,
-          },
-          { status: 403 }
-        )
-      }
-    }
-
     // Check if phone already exists in this Gat
     const existingPhone = await prisma.member.findFirst({
       where: {

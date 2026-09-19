@@ -2,7 +2,6 @@ import { redirect } from "next/navigation"
 import { getCurrentMember } from "@/lib/auth"
 import AdminLayoutClient from "@/components/shared/AdminLayoutClient"
 import prisma from "@/lib/prisma"
-import { checkSubscriptionAccess } from "@/lib/subscription"
 import { headers } from "next/headers"
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -17,8 +16,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (member.role === "MEMBER" && !isAllowedMemberPath) {
     redirect("/member")
   }
-
-  checkSubscriptionAccess(member.organization)
 
   const count = await prisma.member.count({
     where: {

@@ -77,6 +77,8 @@ export async function POST(req: Request) {
           meetingFrequency: meeting_frequency || "MONTHLY",
           isApproved: true,
           subscriptionStatus: "ACTIVE",
+          subscriptionPlan: "FREE",
+          maxMembers: 999999,
         },
       })
 

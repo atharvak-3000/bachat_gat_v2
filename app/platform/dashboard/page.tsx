@@ -10,7 +10,7 @@ export default async function PlatformDashboardPage() {
 
   const totalGats = orgs.length
   const pendingGats = orgs.filter((o: any) => !o.isApproved).length
-  const activeSubs = orgs.filter((o: any) => o.subscriptionStatus === "ACTIVE").length
+  const approvedGats = orgs.filter((o: any) => o.isApproved).length
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
@@ -26,8 +26,8 @@ export default async function PlatformDashboardPage() {
           <p className="text-3xl font-bold text-orange-600">{pendingGats}</p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-          <p className="text-gray-500 text-sm uppercase tracking-wider mb-2">Active Subscriptions</p>
-          <p className="text-3xl font-bold text-green-600">{activeSubs}</p>
+          <p className="text-gray-500 text-sm uppercase tracking-wider mb-2">Approved Gats</p>
+          <p className="text-3xl font-bold text-green-600">{approvedGats}</p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
           <p className="text-gray-500 text-sm uppercase tracking-wider mb-2">Total Members</p>

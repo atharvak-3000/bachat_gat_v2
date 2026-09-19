@@ -15,7 +15,6 @@ export default async function PlatformGatsPage() {
     ...org,
     is_approved: org.isApproved,
     group_code: org.groupCode,
-    subscription_status: org.subscriptionStatus,
     created_at: org.createdAt.toISOString(),
     members_count: org.members.length,
   }))

@@ -17,7 +17,6 @@ export async function GET(req: Request) {
         village: true,
         district: true,
         isApproved: true,
-        subscriptionStatus: true,
         groupCode: true,
       },
     })
@@ -35,7 +34,6 @@ export async function GET(req: Request) {
           village: true,
           district: true,
           isApproved: true,
-          subscriptionStatus: true,
         },
       })
 
@@ -53,7 +51,6 @@ export async function GET(req: Request) {
       village: org.village,
       district: org.district,
       is_approved: org.isApproved,
-      subscription_status: org.subscriptionStatus,
       group_code: org.groupCode,
     })
   } catch (error: any) {
