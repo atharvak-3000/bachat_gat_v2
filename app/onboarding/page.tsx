@@ -1,6 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import DarkModeToggle from "@/components/ui/DarkModeToggle"
@@ -45,8 +46,9 @@ const ONBOARD_T = {
     maxLoan: "कर्ज मर्यादा ₹",
     summaryTitle: "सारांश / Summary",
     fillFields: "कृपया सर्व आवश्यक फील्ड भरा",
-    creationSuccess: "बचत गट यशस्वीरित्या तयार झाला!",
-    submitting: "तयार होत आहे...",
+    creationSuccess: "बचत गटाची माहिती यशस्वीरित्या जतन झाली!",
+    submitting: "जतन होत आहे...",
+    goToDashboard: "डॅशबोर्डवर जा →",
   },
   en: {
     title: "BachatGatOnline",
@@ -72,8 +74,9 @@ const ONBOARD_T = {
     maxLoan: "Max Loan Limit ₹",
     summaryTitle: "Summary",
     fillFields: "Please fill all required fields",
-    creationSuccess: "Bachat Gat created successfully!",
-    submitting: "Creating...",
+    creationSuccess: "Bachat Gat details saved successfully!",
+    submitting: "Saving...",
+    goToDashboard: "Go to Dashboard →",
   },
 }
 
@@ -82,6 +85,7 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [checking, setChecking] = useState(true)
+  const [currentMember, setCurrentMember] = useState<any>(null)
   const [lang, setLang] = useState<"mr" | "en">("mr")
 
   useEffect(() => {
@@ -131,10 +135,32 @@ export default function OnboardingPage() {
             return
           }
 
-          // If admin already has an organization, immediately go to dashboard (no paywall/blocker)
+          setCurrentMember(member)
+
+          // If the organization was already created (e.g. initial sign-up),
+          // DO NOT auto-redirect to dashboard!
+          // Instead, prefill any values so the user can easily review, customize,
+          // and set their actual Gat Name, village, monthly savings, and interest rate!
           if (member.organization) {
-            router.push("/dashboard")
-            return
+            const org = member.organization
+            const isPlaceholderName = !org.name || org.name.includes("'s Bachat Gat")
+            setStep1((prev) => ({
+              ...prev,
+              name: isPlaceholderName ? "" : org.name,
+              village: org.village === "Pune" ? "" : (org.village || ""),
+              taluka: org.taluka || "",
+              district: org.district === "Pune" ? "" : (org.district || ""),
+              meeting_frequency: (org.meetingFrequency || "MONTHLY") as "WEEKLY" | "MONTHLY",
+            }))
+            setStep2((prev) => ({
+              ...prev,
+              monthly_saving_amount: org.monthlySavingAmount && org.monthlySavingAmount !== 10000
+                ? (Number(org.monthlySavingAmount) / 100).toString()
+                : "",
+              default_interest_rate: org.defaultInterestRate != null ? org.defaultInterestRate.toString() : "2",
+              default_penalty_amount: org.defaultPenaltyAmount != null ? (Number(org.defaultPenaltyAmount) / 100).toString() : "0",
+              max_loan_limit: org.maxLoanLimit ? (Number(org.maxLoanLimit) / 100).toString() : "",
+            }))
           }
         }
       } catch (err) {
@@ -149,26 +175,39 @@ export default function OnboardingPage() {
   const handleSubmit = async () => {
     setLoading(true)
     try {
-      const res = await fetch("/api/organizations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: step1.name,
-          village: step1.village,
-          taluka: step1.taluka,
-          district: step1.district,
-          meeting_frequency: step1.meeting_frequency,
-          monthly_saving_amount: parseFloat(step2.monthly_saving_amount) || 0,
-          default_interest_rate: parseFloat(step2.default_interest_rate) || 2,
-          default_penalty_amount: parseFloat(step2.default_penalty_amount) || 0,
-          max_loan_limit: parseFloat(step2.max_loan_limit) || 0,
-        }),
-      })
+      let res: Response
+      const payload = {
+        name: step1.name,
+        village: step1.village,
+        taluka: step1.taluka,
+        district: step1.district,
+        meeting_frequency: step1.meeting_frequency,
+        monthly_saving_amount: parseFloat(step2.monthly_saving_amount) || 0,
+        default_interest_rate: parseFloat(step2.default_interest_rate) || 2,
+        default_penalty_amount: parseFloat(step2.default_penalty_amount) || 0,
+        max_loan_limit: parseFloat(step2.max_loan_limit) || 0,
+      }
+
+      if (currentMember?.organization?.id) {
+        // Update existing organization with user's customized parameters
+        res = await fetch(`/api/organizations/${currentMember.organization.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+      } else {
+        // Create new organization
+        res = await fetch("/api/organizations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+      }
+
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Failed to create organization")
+      if (!res.ok) throw new Error(data.error || "Failed to save organization")
       toast.success(t.creationSuccess)
 
-      // Directly redirect to dashboard - 100% free with no flicker or paywall blocker
       router.push("/dashboard")
       router.refresh()
     } catch (err: unknown) {
@@ -194,6 +233,14 @@ export default function OnboardingPage() {
           <span className="font-black text-lg text-[#1B2B6B] dark:text-white uppercase tracking-wider">{t.title}</span>
         </div>
         <div className="flex items-center gap-3">
+          {currentMember?.organization && (
+            <Link
+              href="/dashboard"
+              className="text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-400 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1A1D27] transition shadow-sm"
+            >
+              {t.goToDashboard}
+            </Link>
+          )}
           <button
             onClick={toggleLanguage}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-orange-200 dark:border-gray-800 text-xs font-bold text-orange-600 dark:text-orange-400 bg-white dark:bg-[#1A1D27] hover:bg-orange-50 dark:hover:bg-orange-950/20 active:scale-95 transition-all shadow-sm"

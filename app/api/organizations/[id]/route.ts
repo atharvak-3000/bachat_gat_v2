@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { requireSuperAdmin, logActivity } from "@/lib/auth"
+import { requireAdminOrAbove, logActivity } from "@/lib/auth"
 import { toP } from "@/lib/calculations"
 
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params
-    const performer = await requireSuperAdmin()
+    const performer = await requireAdminOrAbove()
 
     if (id !== performer.organizationId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
