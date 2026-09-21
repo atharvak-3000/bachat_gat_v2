@@ -43,9 +43,28 @@ export async function PATCH(
     }
 
     const updatedResult = await prisma.$transaction(async (tx: any) => {
-      const updatedPrincipalPaid = emi.principalPaid + pPaid
-      const updatedInterestPaid = emi.interestPaid + iPaid
-      const isFullyPaid = updatedPrincipalPaid >= emi.principalDue && updatedInterestPaid >= emi.interestDue
+      let updatedPrincipalPaid = emi.principalPaid + pPaid
+      let updatedInterestPaid = emi.interestPaid + iPaid
+
+      // If remaining due is within 100 paise (₹1) due to rounding/decimals, treat as fully paid
+      const isPrincipalSatisfied =
+        updatedPrincipalPaid >= emi.principalDue ||
+        (emi.principalDue > updatedPrincipalPaid && emi.principalDue - updatedPrincipalPaid < BigInt(100))
+
+      const isInterestSatisfied =
+        updatedInterestPaid >= emi.interestDue ||
+        (emi.interestDue > updatedInterestPaid && emi.interestDue - updatedInterestPaid < BigInt(100))
+
+      const isFullyPaid = isPrincipalSatisfied && isInterestSatisfied
+
+      // If satisfied, snap to full due so no fractional paise remain
+      if (isPrincipalSatisfied && updatedPrincipalPaid < emi.principalDue) {
+        updatedPrincipalPaid = emi.principalDue
+      }
+      if (isInterestSatisfied && updatedInterestPaid < emi.interestDue) {
+        updatedInterestPaid = emi.interestDue
+      }
+
       const newStatus = isFullyPaid ? "PAID" : "PARTIAL"
 
       const updatedEmi = await tx.loanEmi.update({
@@ -54,19 +73,39 @@ export async function PATCH(
           principalPaid: updatedPrincipalPaid,
           interestPaid: updatedInterestPaid,
           status: newStatus,
-          paidAt: isFullyPaid ? new Date() : emi.paidAt,
+          paidAt: isFullyPaid ? (emi.paidAt || new Date()) : emi.paidAt,
         },
       })
 
-      const newOutstanding = loan.outstandingAmount > pPaid ? loan.outstandingAmount - pPaid : BigInt(0)
+      // Remaining outstanding balance on the loan
+      let newOutstanding = loan.outstandingAmount > pPaid ? loan.outstandingAmount - pPaid : BigInt(0)
+      // If remaining balance is less than ₹1 (100 paise), round it to 0
+      if (newOutstanding < BigInt(100)) {
+        newOutstanding = BigInt(0)
+      }
 
       const allEmis = await tx.loanEmi.findMany({
         where: { loanId: id },
-        select: { status: true },
+        select: { id: true, status: true },
       })
 
-      const allPaid = allEmis.every((e: any) => e.status === "PAID")
+      const allPaid = allEmis.every((e: any) => (e.id === emiId ? newStatus === "PAID" : e.status === "PAID"))
       const isClosed = newOutstanding === BigInt(0) || allPaid
+
+      if (isClosed) {
+        newOutstanding = BigInt(0)
+        // Mark any lingering unclosed EMIs as PAID to prevent orphaned partials due to decimal rounding
+        await tx.loanEmi.updateMany({
+          where: {
+            loanId: id,
+            status: { not: "PAID" },
+          },
+          data: {
+            status: "PAID",
+            paidAt: new Date(),
+          },
+        })
+      }
 
       await tx.loan.update({
         where: { id },

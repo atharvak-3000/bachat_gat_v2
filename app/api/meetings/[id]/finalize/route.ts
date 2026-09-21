@@ -87,7 +87,10 @@ export async function POST(
           })
 
           if (activeLoan) {
-            const newOutstanding = Math.max(0, Number(activeLoan.outstandingAmount) - repaymentRemaining)
+            let newOutstanding = Math.max(0, Number(activeLoan.outstandingAmount) - repaymentRemaining)
+            if (newOutstanding < 100) {
+              newOutstanding = 0
+            }
             const isClosed = newOutstanding === 0
 
             await tx.loan.update({
@@ -117,9 +120,25 @@ export async function POST(
             }
 
             if (emi) {
-              const principal_paid = Number(emi.principalPaid) + repaymentRemaining
-              const interest_paid = Number(emi.interestPaid) + interestPaidRemaining
-              const isPaidFull = principal_paid >= Number(emi.principalDue) && interest_paid >= Number(emi.interestDue)
+              let principal_paid = Number(emi.principalPaid) + repaymentRemaining
+              let interest_paid = Number(emi.interestPaid) + interestPaidRemaining
+
+              const isPrincipalSatisfied =
+                principal_paid >= Number(emi.principalDue) ||
+                (Number(emi.principalDue) > principal_paid && Number(emi.principalDue) - principal_paid < 100)
+
+              const isInterestSatisfied =
+                interest_paid >= Number(emi.interestDue) ||
+                (Number(emi.interestDue) > interest_paid && Number(emi.interestDue) - interest_paid < 100)
+
+              const isPaidFull = isPrincipalSatisfied && isInterestSatisfied
+
+              if (isPrincipalSatisfied && principal_paid < Number(emi.principalDue)) {
+                principal_paid = Number(emi.principalDue)
+              }
+              if (isInterestSatisfied && interest_paid < Number(emi.interestDue)) {
+                interest_paid = Number(emi.interestDue)
+              }
 
               await tx.loanEmi.update({
                 where: { id: emi.id },
@@ -127,7 +146,7 @@ export async function POST(
                   principalPaid: BigInt(principal_paid),
                   interestPaid: BigInt(interest_paid),
                   status: isPaidFull ? "PAID" : principal_paid > 0 || interest_paid > 0 ? "PARTIAL" : "PENDING",
-                  paidAt: isPaidFull ? new Date() : emi.paidAt,
+                  paidAt: isPaidFull ? (emi.paidAt || new Date()) : emi.paidAt,
                 },
               })
             }

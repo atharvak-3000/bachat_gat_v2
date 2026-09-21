@@ -87,6 +87,8 @@ export default function LoanEmisClient({
       recordingBtn: "जमा करत आहे...",
       recordBtn: "जमा करा",
       defaultPurpose: "वैयक्तिक / सर्वसाधारण",
+      closeLoanBtn: "कर्ज बंद करा",
+      closeLoanConfirm: "तुम्हाला खात्री आहे का हे कर्ज बंद करायचे आहे? यामुळे शिल्लक रक्कम ० होईल आणि सर्व हप्ते भरले जातील.",
     },
     en: {
       backToList: "← Back to Loans List",
@@ -129,6 +131,8 @@ export default function LoanEmisClient({
       recordingBtn: "Recording...",
       recordBtn: "Record Payment",
       defaultPurpose: "Personal / General",
+      closeLoanBtn: "Close Loan",
+      closeLoanConfirm: "Are you sure you want to manually close this loan? This will set outstanding balance to 0 and mark all EMIs as paid.",
     }
   }
   const t = T[lang]
@@ -138,15 +142,33 @@ export default function LoanEmisClient({
     Math.round(((loan.loan_amount - loan.outstanding_amount) / loan.loan_amount) * 100)
   )
 
+  const handleCloseLoan = async () => {
+    if (!confirm(t.closeLoanConfirm)) return
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/loans/${loan.id}/close`, { method: "POST" })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || "Failed to close loan")
+      }
+      router.refresh()
+      window.location.reload()
+    } catch (err: any) {
+      alert(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const openPaymentModal = (emi: LoanEmi) => {
     setSelectedEmi(emi)
-    // Pre-populate with the remaining due amounts
+    // Pre-populate with the remaining due amounts rounded to whole rupees
     const remainingPrincipal = Math.max(0, emi.principal_due - emi.principal_paid)
     const remainingInterest = Math.max(0, emi.interest_due - emi.interest_paid)
     
     setFormData({
-      principal_paid: toR(remainingPrincipal).toString(),
-      interest_paid: toR(remainingInterest).toString()
+      principal_paid: Math.round(toR(remainingPrincipal)).toString(),
+      interest_paid: Math.round(toR(remainingInterest)).toString()
     })
     setIsModalOpen(true)
     setError(null)
@@ -259,6 +281,15 @@ export default function LoanEmisClient({
               </span>
             )}
           </div>
+          {loan.status === 'ACTIVE' && role === 'SUPERADMIN' && (
+            <button
+              onClick={handleCloseLoan}
+              disabled={loading}
+              className="mt-2 px-3.5 py-1.5 rounded-xl text-xs font-bold border border-red-500/60 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-600 hover:text-white dark:hover:bg-red-600 transition disabled:opacity-50"
+            >
+              {t.closeLoanBtn}
+            </button>
+          )}
           {loan.rejection_reason && (
             <p className="text-xs text-red-500 dark:text-red-400 font-medium">{t.reasonLabel} {loan.rejection_reason}</p>
           )}
@@ -381,7 +412,7 @@ export default function LoanEmisClient({
                 <input
                   type="number"
                   min="0"
-                  step="1"
+                  step="any"
                   required
                   value={formData.principal_paid}
                   onChange={(e) => setFormData({ ...formData, principal_paid: e.target.value })}
@@ -399,7 +430,7 @@ export default function LoanEmisClient({
                 <input
                   type="number"
                   min="0"
-                  step="1"
+                  step="any"
                   required
                   value={formData.interest_paid}
                   onChange={(e) => setFormData({ ...formData, interest_paid: e.target.value })}

@@ -92,7 +92,8 @@ export function calcMeetingTotals(input: CalcMeetingInput): MeetingTotals {
  * Uses monthly interest rate (e.g. 2% per month): principal × monthlyRate% / 100
  */
 export function calcMonthlyInterest(principalPaise: number, monthlyRatePercent: number): number {
-  return Math.round((principalPaise * monthlyRatePercent) / 100)
+  // Round to nearest whole rupee (stored in paise, multiple of 100)
+  return Math.round((principalPaise * monthlyRatePercent) / 10000) * 100
 }
 
 /**
@@ -107,8 +108,8 @@ export function calcEmiSchedule(
 ): Omit<LoanEmi, 'id' | 'loan_id'>[] {
   const emis: Omit<LoanEmi, 'id' | 'loan_id'>[] = []
   let outstanding = loanAmountPaise
-  // Equal principal installments
-  const basePrincipal = Math.floor(loanAmountPaise / termMonths)
+  // Equal principal installments rounded to nearest whole rupee (multiple of 100 paise)
+  const basePrincipal = Math.floor(loanAmountPaise / (termMonths * 100)) * 100
 
   const startYear = startDate.getFullYear()
   const startMonth = startDate.getMonth()
