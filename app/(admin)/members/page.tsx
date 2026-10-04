@@ -67,11 +67,11 @@ export default function MembersPage() {
       addedSuccessTitle: "सदस्य जोडला गेला!",
       addedSuccessSub: "लॉग इन करण्यासाठी कृपया हे तपशील सदस्यासोबत शेअर करा.",
       badgeSuperadmin: "अध्यक्ष",
-      badgeAdmin: "Manager",
-      badgeMember: "Member",
-      statusActive: "Active",
-      statusPending: "Pending",
-      statusRejected: "Rejected",
+      badgeAdmin: "सचिव",
+      badgeMember: "सदस्य",
+      statusActive: "सक्रिय",
+      statusPending: "प्रलंबित",
+      statusRejected: "नाकारलेले",
       loading: "सदस्य लोड होत आहेत...",
       roleConfirm: "भूमिका बदलायची आहे का?",
       approvedSuccess: "सदस्य मंजूर झाला",
@@ -411,7 +411,7 @@ export default function MembersPage() {
                   <>
                     <button onClick={() => handleApprove(m.id)}
                       className="px-2.5 py-1 rounded-lg bg-green-600 text-white text-xs font-medium whitespace-nowrap hover:bg-green-700 transition-all">
-                      Approve
+                      {lang === 'mr' ? 'मंजूर करा' : 'Approve'}
                     </button>
                     <button onClick={() => handleReject(m.id, m.name)}
                       className="px-2.5 py-1 rounded-lg border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 text-xs font-medium whitespace-nowrap hover:bg-red-50 dark:hover:bg-red-950/20 transition-all">

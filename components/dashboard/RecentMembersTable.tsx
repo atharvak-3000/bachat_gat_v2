@@ -39,7 +39,7 @@ export default function RecentMembersTable({
   }
 
   const handleRoleChange = async (memberId: string, newRole: string) => {
-    if (!confirm(newRole === 'SUPERADMIN' ? 'Make Admin?' : 'Remove Admin?')) return
+    if (!confirm(newRole === 'SUPERADMIN' ? (lang === 'mr' ? 'सचिव बनवायचे?' : 'Make Manager?') : (lang === 'mr' ? 'सचिव काढायचे?' : 'Remove Manager?'))) return
     try {
       const res = await fetch(`/api/members/${memberId}/role`, {
         method: 'PATCH',
@@ -108,12 +108,12 @@ export default function RecentMembersTable({
                     <div className="flex justify-end gap-2">
                       {m.role === 'MEMBER' && (
                         <button onClick={() => handleRoleChange(m.id, 'SUPERADMIN')} className="px-2 py-1 rounded text-xs font-semibold border border-[#2E4099] text-[#2E4099] hover:bg-[#2E4099]/10">
-                          Make Admin
+                          {lang === 'mr' ? 'सचिव बनवा' : 'Make Manager'}
                         </button>
                       )}
                       {m.role === 'SUPERADMIN' && (
                         <button onClick={() => handleRoleChange(m.id, 'MEMBER')} className="px-2 py-1 rounded text-xs font-semibold border border-[#E85D26] text-[#E85D26] hover:bg-[#E85D26]/10">
-                          Remove Admin
+                          {lang === 'mr' ? 'सचिव काढा' : 'Remove Manager'}
                         </button>
                       )}
                     </div>

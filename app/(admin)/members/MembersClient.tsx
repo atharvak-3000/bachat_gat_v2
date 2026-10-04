@@ -53,7 +53,9 @@ export default function MembersClient({ members, currentMember, inviteLink }: Pr
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      toast.success(`भूमिका ${newRole === 'SUPERADMIN' ? 'Admin' : 'Member'} ला बदलली!`)
+      toast.success(lang === 'mr' 
+        ? `भूमिका ${newRole === 'SUPERADMIN' ? 'अध्यक्ष' : 'सदस्य'} वर बदलली!`
+        : `Role changed to ${newRole === 'SUPERADMIN' ? 'Admin' : 'Member'}!`)
       router.refresh()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "भूमिका बदलणे अयशस्वी")
@@ -149,7 +151,11 @@ export default function MembersClient({ members, currentMember, inviteLink }: Pr
                       (m.kyc_status as string) === 'PENDING' ? 'bg-yellow-100 text-yellow-700' :
                       (m.kyc_status as string) === 'SUBMITTED' ? 'bg-blue-100 text-blue-700' :
                       'bg-red-100 text-red-700'
-                    }`}>{m.kyc_status}</span>
+                    }`}>
+                      {lang === 'mr' 
+                        ? ((m.kyc_status as string) === 'VERIFIED' ? 'पडताळलेले' : (m.kyc_status as string) === 'PENDING' ? 'प्रलंबित' : (m.kyc_status as string) === 'SUBMITTED' ? 'सादर केले' : 'नाकारले')
+                        : (m.kyc_status as string)}
+                    </span>
                   </td>
                   <td className="px-6 py-4 text-gray-500 text-xs">
                     {new Date(m.joining_date).toLocaleDateString('en-IN')}
