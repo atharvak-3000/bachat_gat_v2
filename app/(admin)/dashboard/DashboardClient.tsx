@@ -88,8 +88,6 @@ export default function DashboardClient({
       recentActivityTitle: "अलीकडील क्रियाकलाप",
       logsSub: "तुमच्या बचत गटातील अलीकडील बदलांची नोंद.",
       noActivity: "अद्याप कोणताही क्रियाकलाप नोंदवला नाही.",
-      approvalBannerTitle: "तुमचा बचत गट प्लॅटफॉर्म मंजुरीच्या प्रतीक्षेत आहे",
-      approvalBannerSub: "तुमचा बचत गट पडताळणीच्या अधीन आहे. वाट पाहत असताना तुम्ही सदस्य जोडू शकता.",
       draftStatus: "अपूर्ण",
       finalizedStatus: "पूर्ण",
       activeCountText: "सक्रिय",
@@ -128,8 +126,6 @@ export default function DashboardClient({
       recentActivityTitle: "Recent Activity",
       logsSub: "Logs of recent changes in your Bachat Gat.",
       noActivity: "No activity logged yet.",
-      approvalBannerTitle: "Your Bachat Gat is under review",
-      approvalBannerSub: "Your Bachat Gat is under review. You can set up members while waiting.",
       draftStatus: "Draft",
       finalizedStatus: "Finalized",
       activeCountText: "Active",
@@ -143,17 +139,6 @@ export default function DashboardClient({
     <div className="p-8 max-w-7xl mx-auto space-y-8 animate-fadeIn">
       {/* Alert banners block */}
       <div className="space-y-3">
-        {/* Org approval banner */}
-        {!performer.organization.is_approved && (
-          <div className="flex items-start gap-3 bg-orange-50/50 border border-[#E85D26]/20 rounded-2xl px-5 py-4 text-[#1B2B6B] dark:bg-orange-950/10 dark:border-orange-500/20 dark:text-white">
-            <span className="text-xl">ℹ️</span>
-            <div>
-              <p className="font-semibold text-[#1B2B6B] dark:text-white text-sm">{t.approvalBannerTitle}</p>
-              <p className="text-xs text-orange-600 dark:text-orange-400 mt-0.5">{t.approvalBannerSub}</p>
-            </div>
-          </div>
-        )}
-
         {/* Member request pending banner */}
         {pendingMembers.length > 0 && (
           <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-2xl px-5 py-3.5 text-[#1B2B6B] dark:bg-blue-950/20 dark:border-blue-900/50 dark:text-white text-xs sm:text-sm font-semibold">
