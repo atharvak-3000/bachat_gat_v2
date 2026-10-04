@@ -26,8 +26,15 @@ export default function SignInPage() {
   // Bachat Gats data state
   const [organizations, setOrganizations] = useState<BachatGat[]>([])
   const [loadingOrgs, setLoadingOrgs] = useState(true)
+  const [orgsError, setOrgsError] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedGat, setSelectedGat] = useState<BachatGat | null>(null)
+
+  // Direct Group Code fallback
+  const [showCodeInput, setShowCodeInput] = useState(false)
+  const [groupCodeInput, setGroupCodeInput] = useState("")
+  const [codeLoading, setCodeLoading] = useState(false)
+  const [codeError, setCodeError] = useState("")
 
   const [lang, setLang] = useState<"mr" | "en">("mr")
 
@@ -37,7 +44,20 @@ export default function SignInPage() {
       if (savedLang && (savedLang === "mr" || savedLang === "en")) {
         setLang(savedLang)
       }
+
+      // Load cached organizations immediately for instant display
+      try {
+        const cached = localStorage.getItem("bb_cached_orgs")
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setOrganizations(parsed)
+            setLoadingOrgs(false)
+          }
+        }
+      } catch {}
     }
+    fetchOrganizations()
   }, [])
 
   const setLanguage = (l: "mr" | "en") => {
@@ -47,27 +67,64 @@ export default function SignInPage() {
     }
   }
 
-  // Fetch Bachat Gats on component mount
-  const fetchOrganizations = async () => {
-    setLoadingOrgs(true)
+  // Fetch Bachat Gats with automatic retry
+  const fetchOrganizations = async (retryCount = 0) => {
+    setOrgsError(false)
     try {
       const res = await fetch("/api/organizations")
       if (res.ok) {
         const data = await res.json()
         if (data.organizations && Array.isArray(data.organizations)) {
           setOrganizations(data.organizations)
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.setItem("bb_cached_orgs", JSON.stringify(data.organizations))
+            } catch {}
+          }
+          setLoadingOrgs(false)
+          return
         }
       }
+      throw new Error("Failed to load")
     } catch (err) {
-      console.error("Error fetching organizations:", err)
+      console.warn(`[SignIn] Fetch organizations failed (attempt ${retryCount + 1}):`, err)
+      if (retryCount < 2) {
+        setTimeout(() => fetchOrganizations(retryCount + 1), 1000)
+        return
+      }
+      setOrgsError(true)
     } finally {
       setLoadingOrgs(false)
     }
   }
 
-  useEffect(() => {
-    fetchOrganizations()
-  }, [])
+  async function handleFindGatByCode(e: React.FormEvent) {
+    e.preventDefault()
+    if (!groupCodeInput.trim()) return
+    setCodeLoading(true)
+    setCodeError("")
+    try {
+      const res = await fetch(`/api/organizations/by-code?code=${groupCodeInput.trim().toUpperCase()}`)
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setCodeError(lang === "mr" ? "अवैध गट कोड. कृपया पुन्हा तपासा." : "Invalid group code. Please check again.")
+        setCodeLoading(false)
+        return
+      }
+      handleSelectGat({
+        id: data.id,
+        name: data.name,
+        village: data.village,
+        district: data.district,
+        groupCode: data.group_code,
+        memberCount: 0,
+      })
+    } catch {
+      setCodeError(lang === "mr" ? "गट शोधण्यात त्रुटी आली." : "Error finding group.")
+    } finally {
+      setCodeLoading(false)
+    }
+  }
 
   const filteredOrgs = useMemo(() => {
     if (!searchQuery.trim()) return organizations
@@ -366,18 +423,50 @@ export default function SignInPage() {
 
               {/* Bachat Gats List */}
               <div className="max-h-[300px] overflow-y-auto space-y-2.5 pr-1 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700">
-                {loadingOrgs ? (
+                {loadingOrgs && organizations.length === 0 ? (
                   <div className="py-8 text-center space-y-2">
                     <div className="w-8 h-8 border-3 border-[#E85D26] border-t-transparent rounded-full animate-spin mx-auto"></div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">{t.loadingGats}</p>
                   </div>
+                ) : orgsError && organizations.length === 0 ? (
+                  <div className="py-6 text-center px-4 space-y-3">
+                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                      {lang === "mr" ? "सर्व्हरशी संपर्क जोडण्यात अडचण आली." : "Connection issue reaching server."}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {lang === "mr" ? "कृपया पुन्हा प्रयत्न करा किंवा तुमचा गट कोड टाका." : "Please retry or enter your group code."}
+                    </p>
+                    <div className="flex flex-col gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => fetchOrganizations()}
+                        className="px-4 py-2 bg-[#E85D26] text-white text-xs font-bold rounded-xl hover:bg-[#D04E1A] transition active:scale-95 shadow-sm"
+                      >
+                        🔄 {lang === "mr" ? "पुन्हा प्रयत्न करा (Retry)" : "Retry"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowCodeInput(true)}
+                        className="text-xs text-[#E85D26] hover:underline font-semibold"
+                      >
+                        {lang === "mr" ? "गट कोड टाकून लॉगिन करा →" : "Login using Group Code →"}
+                      </button>
+                    </div>
+                  </div>
                 ) : filteredOrgs.length === 0 ? (
-                  <div className="py-8 text-center px-4">
-                    <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-2 text-xl text-gray-400">
+                  <div className="py-8 text-center px-4 space-y-2">
+                    <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-1 text-xl text-gray-400">
                       🔍
                     </div>
                     <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">{t.noGatsFound}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t.noGatsSub}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{t.noGatsSub}</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowCodeInput(!showCodeInput)}
+                      className="text-xs text-[#E85D26] hover:underline font-semibold pt-1 block mx-auto"
+                    >
+                      {lang === "mr" ? "गट कोडने शोधा" : "Find by Group Code"}
+                    </button>
                   </div>
                 ) : (
                   filteredOrgs.map((gat) => {
@@ -416,6 +505,49 @@ export default function SignInPage() {
                       </button>
                     )
                   })
+                )}
+              </div>
+
+              {/* Optional Group Code direct search toggle */}
+              <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 text-center">
+                {!showCodeInput ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowCodeInput(true)}
+                    className="text-xs text-gray-500 dark:text-gray-400 hover:text-[#E85D26] dark:hover:text-[#E85D26] transition font-medium"
+                  >
+                    {lang === "mr" ? "किंवा गट कोड (Group Code) ने शोधा 🔑" : "Or enter Group Code directly 🔑"}
+                  </button>
+                ) : (
+                  <form onSubmit={handleFindGatByCode} className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={groupCodeInput}
+                        onChange={(e) => setGroupCodeInput(e.target.value.toUpperCase())}
+                        placeholder={lang === "mr" ? "उदा. ABCD12" : "e.g. ABCD12"}
+                        className="flex-1 px-3 py-2 text-xs font-mono uppercase bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#E85D26]"
+                      />
+                      <button
+                        type="submit"
+                        disabled={codeLoading || !groupCodeInput.trim()}
+                        className="px-3.5 py-2 bg-[#E85D26] hover:bg-[#D04E1A] text-white text-xs font-bold rounded-xl disabled:opacity-50 transition active:scale-95"
+                      >
+                        {codeLoading ? "..." : (lang === "mr" ? "शोधा" : "Find")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCodeInput(false)
+                          setCodeError("")
+                        }}
+                        className="text-xs text-gray-400 hover:text-gray-600 px-1"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    {codeError && <p className="text-[11px] text-red-500 font-medium text-left">{codeError}</p>}
+                  </form>
                 )}
               </div>
             </div>

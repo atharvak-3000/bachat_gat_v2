@@ -133,10 +133,64 @@ export async function POST(req: Request) {
   }
 }
 
+let cachedOrganizations: { data: any[]; timestamp: number } | null = null
+const CACHE_TTL_MS = 60 * 1000 // 60s cache
+
+async function fetchOrgsFromDb(whereClause: any, retries = 2): Promise<any[]> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const organizations = await prisma.organization.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          name: true,
+          nameMarathi: true,
+          village: true,
+          taluka: true,
+          district: true,
+          groupCode: true,
+          isApproved: true,
+          _count: {
+            select: {
+              members: {
+                where: { isActive: true },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+      })
+      return organizations
+    } catch (err: any) {
+      console.warn(`[GET /api/organizations] Attempt ${attempt + 1} error:`, err?.message || err)
+      if (attempt === retries) throw err
+      await new Promise((r) => setTimeout(r, 500))
+    }
+  }
+  return []
+}
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
     const q = searchParams.get("q")?.trim()
+
+    // Serve fresh in-memory cache if available and not a search query
+    if (!q && cachedOrganizations && Date.now() - cachedOrganizations.timestamp < CACHE_TTL_MS) {
+      return NextResponse.json(
+        {
+          success: true,
+          organizations: cachedOrganizations.data,
+          cached: true,
+        },
+        {
+          headers: {
+            "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120",
+          },
+        }
+      )
+    }
 
     let whereClause: any = {}
     if (q) {
@@ -152,48 +206,66 @@ export async function GET(req: Request) {
       }
     }
 
-    const organizations = await prisma.organization.findMany({
-      where: whereClause,
-      select: {
-        id: true,
-        name: true,
-        nameMarathi: true,
-        village: true,
-        taluka: true,
-        district: true,
-        groupCode: true,
-        isApproved: true,
-        _count: {
-          select: {
-            members: {
-              where: { isActive: true },
-            },
-          },
+    try {
+      const organizations = await fetchOrgsFromDb(whereClause, 2)
+
+      const formatted = organizations.map((org: any) => ({
+        id: org.id,
+        name: org.name,
+        nameMarathi: org.nameMarathi || "",
+        village: org.village,
+        taluka: org.taluka || "",
+        district: org.district,
+        groupCode: org.groupCode,
+        isApproved: org.isApproved,
+        memberCount: org._count?.members ?? 0,
+      }))
+
+      if (!q) {
+        cachedOrganizations = {
+          data: formatted,
+          timestamp: Date.now(),
+        }
+      }
+
+      return NextResponse.json(
+        {
+          success: true,
+          organizations: formatted,
         },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 100,
-    })
-
-    const formatted = organizations.map((org: any) => ({
-      id: org.id,
-      name: org.name,
-      nameMarathi: org.nameMarathi || "",
-      village: org.village,
-      taluka: org.taluka || "",
-      district: org.district,
-      groupCode: org.groupCode,
-      isApproved: org.isApproved,
-      memberCount: org._count?.members ?? 0,
-    }))
-
-    return NextResponse.json({
-      success: true,
-      organizations: formatted,
-    })
+        {
+          headers: {
+            "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120",
+          },
+        }
+      )
+    } catch (dbErr: any) {
+      // If DB failed but we have any cached data, serve it gracefully
+      if (cachedOrganizations && cachedOrganizations.data.length > 0) {
+        console.warn("[GET /api/organizations] DB failed, serving fallback cached organizations")
+        let filtered = cachedOrganizations.data
+        if (q) {
+          const lowerQ = q.toLowerCase()
+          filtered = filtered.filter(
+            (o) =>
+              o.name?.toLowerCase().includes(lowerQ) ||
+              o.village?.toLowerCase().includes(lowerQ) ||
+              o.district?.toLowerCase().includes(lowerQ) ||
+              o.groupCode?.toLowerCase().includes(lowerQ)
+          )
+        }
+        return NextResponse.json({
+          success: true,
+          organizations: filtered,
+          fallback: true,
+        })
+      }
+      throw dbErr
+    }
   } catch (error: any) {
-    console.error("GET /api/organizations error:", error)
+    console.error("GET /api/organizations fatal error:", error)
     return NextResponse.json({ error: "Failed to fetch organizations" }, { status: 500 })
   }
 }
+
 
