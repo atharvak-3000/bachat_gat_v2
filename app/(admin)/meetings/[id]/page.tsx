@@ -309,6 +309,31 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
       .then(d => setCurrentMemberRole(d.role || ''))
   }, [])
 
+  // Computed contributions list and filtered list (called before any early returns to satisfy React Rules of Hooks)
+  const contributionsList = Object.values(contribs)
+
+  const filteredContributions = useMemo(() => {
+    if (!memberSearchQuery.trim()) return contributionsList
+    const query = memberSearchQuery.toLowerCase().trim()
+    const cleanNumQuery = query.replace(/^#/, "")
+
+    return contributionsList.filter((c: any, index: number) => {
+      const member = c.member
+      const name = (member?.name || "").toLowerCase()
+      const nameMarathi = (member?.name_marathi || member?.nameMarathi || "").toLowerCase()
+      const memberNum = String(member?.member_number ?? member?.memberNumber ?? (index + 1))
+      const phone = String(member?.phone || "")
+
+      return (
+        name.includes(query) ||
+        nameMarathi.includes(query) ||
+        memberNum === cleanNumQuery ||
+        memberNum.includes(cleanNumQuery) ||
+        phone.includes(query)
+      )
+    })
+  }, [contribs, memberSearchQuery])
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
@@ -346,31 +371,6 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
   const openingBalanceValue = Number(meeting.opening_balance ?? meeting.openingBalance ?? 0)
   const monthYearValue = meeting.month_year || meeting.monthYear
   const closingDateValue = meeting.closing_date || meeting.closingDate
-
-  // Computed values
-  const contributionsList = Object.values(contribs)
-
-  const filteredContributions = useMemo(() => {
-    if (!memberSearchQuery.trim()) return contributionsList
-    const query = memberSearchQuery.toLowerCase().trim()
-    const cleanNumQuery = query.replace(/^#/, "")
-
-    return contributionsList.filter((c: any, index: number) => {
-      const member = c.member
-      const name = (member?.name || "").toLowerCase()
-      const nameMarathi = (member?.name_marathi || member?.nameMarathi || "").toLowerCase()
-      const memberNum = String(member?.member_number ?? member?.memberNumber ?? (index + 1))
-      const phone = String(member?.phone || "")
-
-      return (
-        name.includes(query) ||
-        nameMarathi.includes(query) ||
-        memberNum === cleanNumQuery ||
-        memberNum.includes(cleanNumQuery) ||
-        phone.includes(query)
-      )
-    })
-  }, [contributionsList, memberSearchQuery])
 
   const sumSavings = contributionsList.reduce((sum, c: any) => sum + Number(c.savings_amount ?? c.savingsAmount ?? 0), 0)
   const sumPenalties = contributionsList.reduce((sum, c: any) => sum + Number(c.penalty_paid ?? c.penaltyPaid ?? 0), 0)
