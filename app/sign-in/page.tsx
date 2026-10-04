@@ -1,8 +1,19 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import Image from "next/image"
 
 type Screen = "landing" | "select" | "superadmin" | "member"
+
+interface BachatGat {
+  id: string
+  name: string
+  nameMarathi?: string
+  village: string
+  taluka?: string
+  district: string
+  groupCode: string
+  memberCount: number
+}
 
 export default function SignInPage() {
   const [screen, setScreen] = useState<Screen>("landing")
@@ -11,6 +22,12 @@ export default function SignInPage() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+
+  // Bachat Gats data state
+  const [organizations, setOrganizations] = useState<BachatGat[]>([])
+  const [loadingOrgs, setLoadingOrgs] = useState(true)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedGat, setSelectedGat] = useState<BachatGat | null>(null)
 
   const [lang, setLang] = useState<"mr" | "en">("mr")
 
@@ -30,12 +47,64 @@ export default function SignInPage() {
     }
   }
 
+  // Fetch Bachat Gats on component mount
+  const fetchOrganizations = async () => {
+    setLoadingOrgs(true)
+    try {
+      const res = await fetch("/api/organizations")
+      if (res.ok) {
+        const data = await res.json()
+        if (data.organizations && Array.isArray(data.organizations)) {
+          setOrganizations(data.organizations)
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching organizations:", err)
+    } finally {
+      setLoadingOrgs(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchOrganizations()
+  }, [])
+
+  const filteredOrgs = useMemo(() => {
+    if (!searchQuery.trim()) return organizations
+    const query = searchQuery.toLowerCase().trim()
+    return organizations.filter((org) => {
+      const name = (org.name || "").toLowerCase()
+      const nameMarathi = (org.nameMarathi || "").toLowerCase()
+      const village = (org.village || "").toLowerCase()
+      const taluka = (org.taluka || "").toLowerCase()
+      const district = (org.district || "").toLowerCase()
+      const code = (org.groupCode || "").toLowerCase()
+      return (
+        name.includes(query) ||
+        nameMarathi.includes(query) ||
+        village.includes(query) ||
+        taluka.includes(query) ||
+        district.includes(query) ||
+        code.includes(query)
+      )
+    })
+  }, [organizations, searchQuery])
+
   const T = {
     mr: {
       createGat: "नवीन बचत गट तयार करा",
       createSub: "तुमचा गट नोंदवा आणि सुरुवात करा",
       loginGat: "विद्यमान गटात लॉगिन करा",
       loginSub: "तुमच्या गटाचे डॅशबोर्ड उघडा",
+      selectGatTitle: "विद्यमान बचत गटात लॉगिन करा",
+      selectGatSub: "लॉगिन करण्यासाठी खालील यादीतून तुमचा गट निवडा",
+      searchPlaceholder: "गटाचे नाव, गाव किंवा जिल्हा शोधा...",
+      noGatsFound: "कोणताही बचत गट आढळला नाही",
+      noGatsSub: "शोधलेले नाव किंवा स्थान तपासा अथवा नवीन गट तयार करा",
+      loadingGats: "बचत गट लोड होत आहेत...",
+      selectedGatLabel: "निवडलेला बचत गट",
+      changeGat: "गट बदला",
+      membersCount: "सदस्य",
       trustedBy: "महाराष्ट्रातील बचत गटांचा विश्वास",
       loginAs: "म्हणून लॉगिन करा",
       chooseRole: "सुरू ठेवण्यासाठी तुमची भूमिका निवडा",
@@ -50,6 +119,7 @@ export default function SignInPage() {
       signIn: "साइन इन करा",
       signingIn: "साइन इन करत आहे...",
       back: "← मागे",
+      changeRole: "← भूमिका बदला",
       invalidMember: "अवैध फोन नंबर किंवा पासवर्ड. तुमच्या गट अध्यक्षांशी संपर्क साधा.",
       invalidAdmin: "अवैध ईमेल किंवा पासवर्ड.",
       noCredentials: "लॉगिन माहिती नाही? तुमच्या गट महाध्यक्षांना विचारा.",
@@ -59,12 +129,22 @@ export default function SignInPage() {
       adminLoginSub: "तुमच्या ईमेलने साइन इन करा",
       memberLoginTitle: "सदस्य लॉगिन",
       memberLoginSub: "अध्यक्षांकडून मिळालेली माहिती वापरा",
+      totalGatsAvailable: "उपलब्ध गट",
     },
     en: {
       createGat: "Create New Bachat Gat",
       createSub: "Register your group and get started",
       loginGat: "Login to Existing Gat",
       loginSub: "Access your group's dashboard",
+      selectGatTitle: "Login to Existing Bachat Gat",
+      selectGatSub: "Select your group below to proceed",
+      searchPlaceholder: "Search by group name, village or district...",
+      noGatsFound: "No Bachat Gats found",
+      noGatsSub: "Check search query or register a new group",
+      loadingGats: "Loading Bachat Gats...",
+      selectedGatLabel: "Selected Bachat Gat",
+      changeGat: "Change Gat",
+      membersCount: "members",
       trustedBy: "Trusted by Bachat Gats across Maharashtra",
       loginAs: "Login As",
       chooseRole: "Choose your role to continue",
@@ -79,6 +159,7 @@ export default function SignInPage() {
       signIn: "Sign In",
       signingIn: "Signing in...",
       back: "← Back",
+      changeRole: "← Change Role",
       invalidMember: "Invalid phone number or password. Contact your group admin.",
       invalidAdmin: "Invalid email or password.",
       noCredentials: "Don't have credentials? Ask your group superadmin.",
@@ -88,6 +169,7 @@ export default function SignInPage() {
       adminLoginSub: "Sign in with your email",
       memberLoginTitle: "Member Login",
       memberLoginSub: "Use credentials from your admin",
+      totalGatsAvailable: "Available Groups",
     },
   }
   const t = T[lang]
@@ -132,6 +214,12 @@ export default function SignInPage() {
     setPassword("")
   }
 
+  function handleSelectGat(gat: BachatGat) {
+    setSelectedGat(gat)
+    reset()
+    setScreen("select")
+  }
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setError("")
@@ -139,7 +227,20 @@ export default function SignInPage() {
 
     try {
       const endpoint = screen === "member" ? "/api/auth/login-phone" : "/api/auth/login-email"
-      const payload = screen === "member" ? { phone, password } : { email, password }
+      const payload: any =
+        screen === "member"
+          ? {
+              phone,
+              password,
+              organizationId: selectedGat?.id,
+              groupCode: selectedGat?.groupCode,
+            }
+          : {
+              email,
+              password,
+              organizationId: selectedGat?.id,
+              groupCode: selectedGat?.groupCode,
+            }
 
       const res = await fetch(endpoint, {
         method: "POST",
@@ -175,9 +276,10 @@ export default function SignInPage() {
     }
   }
 
+  // --- SCREEN 1: LANDING / GAT SELECTION SCREEN ---
   if (screen === "landing")
     return (
-      <div className="relative min-h-screen bg-gradient-to-br from-[#1B2B6B] to-[#2E4099] dark:from-[#0D1021] dark:to-[#0F1117] flex items-center justify-center p-4 transition-colors duration-200">
+      <div className="relative min-h-screen bg-gradient-to-br from-[#1B2B6B] to-[#2E4099] dark:from-[#0D1021] dark:to-[#0F1117] flex items-center justify-center p-4 py-12 transition-colors duration-200">
         <a
           href="/"
           className="absolute top-4 left-4 flex items-center gap-1.5 text-sm text-white/70 hover:text-white transition"
@@ -185,8 +287,9 @@ export default function SignInPage() {
           {lang === "mr" ? "← मुख्यपृष्ठ" : "← Home"}
         </a>
         <LangToggle />
-        <div className="w-full max-w-sm">
-          <div className="text-center mb-10 flex flex-col items-center">
+        <div className="w-full max-w-md">
+          {/* Header & Logo */}
+          <div className="text-center mb-8 flex flex-col items-center">
             <div className="relative h-16 w-64 mb-2">
               <Image
                 src="/logo-horizontal.png"
@@ -198,45 +301,132 @@ export default function SignInPage() {
               />
             </div>
             <p className="text-orange-300 dark:text-orange-400 font-medium mt-1">{t.logoSub}</p>
-            <p className="text-blue-100 dark:text-blue-200 text-sm mt-2">{t.logoDesc}</p>
+            <p className="text-blue-100 dark:text-blue-200 text-sm mt-1">{t.logoDesc}</p>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-4">
+            {/* Create New Bachat Gat Card */}
             <a
               href="/sign-up"
-              className="flex items-center gap-4 p-5 bg-[#E85D26] text-white rounded-2xl shadow-md hover:bg-[#D04E1A] transition-all active:scale-[0.98]"
+              className="flex items-center gap-4 p-4 sm:p-5 bg-gradient-to-r from-[#E85D26] to-[#F17336] text-white rounded-2xl shadow-lg hover:shadow-orange-500/20 hover:brightness-105 transition-all active:scale-[0.98] group"
             >
-              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
                 <span className="text-2xl">✨</span>
               </div>
-              <div>
-                <p className="font-bold text-lg leading-tight">{t.createGat}</p>
-                <p className="text-orange-100 text-sm mt-0.5">{t.createSub}</p>
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <p className="font-bold text-lg leading-tight">{t.createGat}</p>
+                  <span className="text-white/80 group-hover:translate-x-1 transition-transform">→</span>
+                </div>
+                <p className="text-orange-100 text-xs sm:text-sm mt-0.5">{t.createSub}</p>
               </div>
             </a>
 
-            <button
-              onClick={() => {
-                reset()
-                setScreen("select")
-              }}
-              className="w-full flex items-center gap-4 p-5 bg-white dark:bg-[#1A1D27] border border-transparent dark:border-gray-800 rounded-2xl hover:border-[#E85D26] hover:bg-slate-50 dark:hover:bg-gray-800 transition-all active:scale-[0.98] text-left shadow-sm text-[#1B2B6B] dark:text-white"
-            >
-              <div className="w-12 h-12 bg-orange-100 dark:bg-orange-950/20 rounded-xl flex items-center justify-center shrink-0">
-                <span className="text-2xl">🔑</span>
+            {/* Existing Bachat Gats Section */}
+            <div className="bg-white dark:bg-[#1A1D27] rounded-3xl p-5 border border-white/20 dark:border-gray-800 shadow-2xl">
+              <div className="mb-3.5">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="font-bold text-[#1B2B6B] dark:text-white text-base sm:text-lg flex items-center gap-2">
+                    <span>🏛️</span> {t.selectGatTitle}
+                  </h3>
+                  {organizations.length > 0 && (
+                    <span className="text-[11px] font-semibold px-2 py-0.5 bg-orange-50 dark:bg-orange-950/40 text-[#E85D26] rounded-full border border-orange-200 dark:border-orange-900/50">
+                      {organizations.length} {t.totalGatsAvailable}
+                    </span>
+                  )}
+                </div>
+                <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
+                  {t.selectGatSub}
+                </p>
               </div>
-              <div>
-                <p className="font-bold text-lg leading-tight">{t.loginGat}</p>
-                <p className="text-gray-500 dark:text-gray-400 text-sm mt-0.5">{t.loginSub}</p>
+
+              {/* Search Bar */}
+              <div className="relative mb-3.5">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t.searchPlaceholder}
+                  className="w-full pl-9 pr-8 py-2.5 bg-gray-50 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700 rounded-xl text-xs sm:text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#E85D26] focus:border-transparent transition-all"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
-            </button>
+
+              {/* Bachat Gats List */}
+              <div className="max-h-[300px] overflow-y-auto space-y-2.5 pr-1 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700">
+                {loadingOrgs ? (
+                  <div className="py-8 text-center space-y-2">
+                    <div className="w-8 h-8 border-3 border-[#E85D26] border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{t.loadingGats}</p>
+                  </div>
+                ) : filteredOrgs.length === 0 ? (
+                  <div className="py-8 text-center px-4">
+                    <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-2 text-xl text-gray-400">
+                      🔍
+                    </div>
+                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">{t.noGatsFound}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t.noGatsSub}</p>
+                  </div>
+                ) : (
+                  filteredOrgs.map((gat) => {
+                    const locationParts = [gat.village, gat.taluka, gat.district].filter(Boolean)
+                    const locationStr = locationParts.join(", ")
+
+                    return (
+                      <button
+                        key={gat.id}
+                        type="button"
+                        onClick={() => handleSelectGat(gat)}
+                        className="w-full text-left p-3.5 bg-gray-50 dark:bg-gray-900/60 hover:bg-orange-50/70 dark:hover:bg-orange-950/20 border border-gray-200/80 dark:border-gray-800 hover:border-[#E85D26] dark:hover:border-[#E85D26] rounded-2xl transition-all duration-150 active:scale-[0.99] group shadow-sm flex items-center justify-between gap-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-sm sm:text-base text-gray-900 dark:text-white truncate group-hover:text-[#E85D26] transition-colors">
+                              {gat.name}
+                            </h4>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 mt-1">
+                            <span className="inline-flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300">
+                              <span>📍</span>
+                              <span className="truncate max-w-[160px] sm:max-w-[200px]">{locationStr || "Maharashtra"}</span>
+                            </span>
+
+                            <span className="inline-flex items-center text-[11px] font-medium px-2 py-0.5 bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 rounded-md">
+                              👥 {gat.memberCount} {t.membersCount}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="w-8 h-8 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-center shrink-0 text-gray-400 group-hover:text-white group-hover:bg-[#E85D26] group-hover:border-[#E85D26] transition-all">
+                          <span className="text-sm font-bold">→</span>
+                        </div>
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+            </div>
           </div>
 
-          <p className="text-center text-xs text-blue-200 dark:text-gray-400 mt-8">{t.trustedBy}</p>
+          <p className="text-center text-xs text-blue-200 dark:text-gray-400 mt-6">{t.trustedBy}</p>
         </div>
       </div>
     )
 
+  // --- SCREEN 2: ROLE SELECTION FOR THE CHOSEN GAT ---
   if (screen === "select")
     return (
       <div className="relative min-h-screen bg-gradient-to-br from-[#1B2B6B] to-[#2E4099] dark:from-[#0D1021] dark:to-[#0F1117] flex items-center justify-center p-4 transition-colors duration-200">
@@ -244,50 +434,75 @@ export default function SignInPage() {
         <div className="w-full max-w-sm">
           <button
             onClick={() => setScreen("landing")}
-            className="flex items-center gap-1.5 text-sm text-blue-200 hover:text-white mb-6"
+            className="flex items-center gap-1.5 text-sm text-blue-200 hover:text-white mb-5 transition"
           >
-            {t.back}
+            {t.changeGat ? `← ${t.changeGat}` : t.back}
           </button>
 
-          <div className="text-center mb-8">
+          {/* Selected Gat Pill / Badge */}
+          {selectedGat && (
+            <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-4 mb-6 text-white flex items-center justify-between gap-3 shadow-lg">
+              <div className="min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-orange-300">
+                  {t.selectedGatLabel}
+                </span>
+                <p className="font-bold text-base truncate">{selectedGat.name}</p>
+                <p className="text-xs text-blue-200 truncate mt-0.5">
+                  📍 {[selectedGat.village, selectedGat.district].filter(Boolean).join(", ")}
+                </p>
+              </div>
+              <button
+                onClick={() => setScreen("landing")}
+                className="text-xs font-semibold px-2.5 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg shrink-0 transition"
+              >
+                {t.changeGat}
+              </button>
+            </div>
+          )}
+
+          <div className="text-center mb-6">
             <h2 className="text-2xl font-bold text-white">{t.loginAs}</h2>
             <p className="text-blue-200 dark:text-gray-400 text-sm mt-1">{t.chooseRole}</p>
           </div>
 
           <div className="space-y-3">
+            {/* Superadmin / Mahadhyaksh Button */}
             <button
               onClick={() => {
                 reset()
                 setScreen("superadmin")
               }}
-              className="w-full flex items-center gap-4 p-5 bg-white dark:bg-[#1A1D27] border border-transparent dark:border-gray-800 rounded-2xl hover:border-[#E85D26] hover:bg-orange-50/50 dark:hover:bg-orange-950/10 transition-all active:scale-[0.98] text-left shadow-sm"
+              className="w-full flex items-center gap-4 p-5 bg-white dark:bg-[#1A1D27] border border-transparent dark:border-gray-800 rounded-2xl hover:border-[#E85D26] hover:bg-orange-50/50 dark:hover:bg-orange-950/10 transition-all active:scale-[0.98] text-left shadow-sm group"
             >
-              <div className="w-14 h-14 bg-orange-100 dark:bg-orange-950/20 text-[#E85D26] rounded-2xl flex items-center justify-center shrink-0">
+              <div className="w-14 h-14 bg-orange-100 dark:bg-orange-950/20 text-[#E85D26] rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                 <Image src="/Bachat Gat icons/Superadmin.svg" alt="Superadmin" width={32} height={32} />
               </div>
               <div>
                 <p className="font-bold text-gray-900 dark:text-white text-lg">{t.superadmin}</p>
-                <p className="text-gray-500 dark:text-gray-400 text-sm mt-0.5">{t.superadminDesc}</p>
-                <p className="text-[#E85D26] dark:text-orange-400 text-xs mt-1 font-semibold">
-                  {t.superadminEmail}
+                <p className="text-gray-500 dark:text-gray-400 text-xs sm:text-sm mt-0.5">{t.superadminDesc}</p>
+                <p className="text-[#E85D26] dark:text-orange-400 text-xs mt-1.5 font-semibold">
+                  {t.superadminEmail} →
                 </p>
               </div>
             </button>
 
+            {/* Member Button */}
             <button
               onClick={() => {
                 reset()
                 setScreen("member")
               }}
-              className="w-full flex items-center gap-4 p-5 bg-white dark:bg-[#1A1D27] border border-transparent dark:border-gray-800 rounded-2xl hover:border-[#E85D26] hover:bg-orange-50/50 dark:hover:bg-orange-950/10 transition-all active:scale-[0.98] text-left shadow-sm"
+              className="w-full flex items-center gap-4 p-5 bg-white dark:bg-[#1A1D27] border border-transparent dark:border-gray-800 rounded-2xl hover:border-[#E85D26] hover:bg-orange-50/50 dark:hover:bg-orange-950/10 transition-all active:scale-[0.98] text-left shadow-sm group"
             >
-              <div className="w-14 h-14 bg-orange-100 dark:bg-orange-950/20 text-[#E85D26] rounded-2xl flex items-center justify-center shrink-0">
+              <div className="w-14 h-14 bg-orange-100 dark:bg-orange-950/20 text-[#E85D26] rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                 <Image src="/Bachat Gat icons/Member.svg" alt="Member" width={32} height={32} />
               </div>
               <div>
                 <p className="font-bold text-gray-900 dark:text-white text-lg">{t.member}</p>
-                <p className="text-gray-500 dark:text-gray-400 text-sm mt-0.5">{t.memberDesc}</p>
-                <p className="text-[#E85D26] dark:text-orange-400 text-xs mt-1 font-semibold">{t.memberPhone}</p>
+                <p className="text-gray-500 dark:text-gray-400 text-xs sm:text-sm mt-0.5">{t.memberDesc}</p>
+                <p className="text-[#E85D26] dark:text-orange-400 text-xs mt-1.5 font-semibold">
+                  {t.memberPhone} →
+                </p>
               </div>
             </button>
           </div>
@@ -295,6 +510,7 @@ export default function SignInPage() {
       </div>
     )
 
+  // --- SCREEN 3 & 4: CREDENTIAL LOGIN FOR MAHADHYAKSH OR MEMBER ---
   const isMember = screen === "member"
 
   return (
@@ -306,10 +522,34 @@ export default function SignInPage() {
             setScreen("select")
             reset()
           }}
-          className="flex items-center gap-1.5 text-sm text-blue-200 hover:text-white mb-6"
+          className="flex items-center gap-1.5 text-sm text-blue-200 hover:text-white mb-4 transition"
         >
-          {t.back}
+          {t.changeRole}
         </button>
+
+        {/* Selected Gat header banner */}
+        {selectedGat && (
+          <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-3 mb-4 text-white flex items-center justify-between gap-2 shadow-md">
+            <div className="min-w-0">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-orange-300">
+                {t.selectedGatLabel}
+              </span>
+              <p className="font-bold text-sm truncate">{selectedGat.name}</p>
+              <p className="text-[11px] text-blue-200 truncate">
+                📍 {[selectedGat.village, selectedGat.district].filter(Boolean).join(", ")}
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                reset()
+                setScreen("landing")
+              }}
+              className="text-[11px] font-semibold px-2 py-1 bg-white/20 hover:bg-white/30 rounded-lg shrink-0 transition"
+            >
+              {t.changeGat}
+            </button>
+          </div>
+        )}
 
         <div className="bg-white dark:bg-[#1A1D27] rounded-3xl border border-white/10 dark:border-gray-800 shadow-xl p-8">
           <div className="flex items-center gap-3 mb-6">

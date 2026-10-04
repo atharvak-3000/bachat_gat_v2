@@ -132,3 +132,68 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Failed to create organization" }, { status: 500 })
   }
 }
+
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const q = searchParams.get("q")?.trim()
+
+    let whereClause: any = {}
+    if (q) {
+      whereClause = {
+        OR: [
+          { name: { contains: q } },
+          { nameMarathi: { contains: q } },
+          { village: { contains: q } },
+          { taluka: { contains: q } },
+          { district: { contains: q } },
+          { groupCode: { contains: q } },
+        ],
+      }
+    }
+
+    const organizations = await prisma.organization.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        name: true,
+        nameMarathi: true,
+        village: true,
+        taluka: true,
+        district: true,
+        groupCode: true,
+        isApproved: true,
+        _count: {
+          select: {
+            members: {
+              where: { isActive: true },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    })
+
+    const formatted = organizations.map((org: any) => ({
+      id: org.id,
+      name: org.name,
+      nameMarathi: org.nameMarathi || "",
+      village: org.village,
+      taluka: org.taluka || "",
+      district: org.district,
+      groupCode: org.groupCode,
+      isApproved: org.isApproved,
+      memberCount: org._count?.members ?? 0,
+    }))
+
+    return NextResponse.json({
+      success: true,
+      organizations: formatted,
+    })
+  } catch (error: any) {
+    console.error("GET /api/organizations error:", error)
+    return NextResponse.json({ error: "Failed to fetch organizations" }, { status: 500 })
+  }
+}
+

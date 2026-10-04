@@ -5,7 +5,7 @@ import { createAuthToken, toSafeMember } from "@/lib/auth"
 
 export async function POST(req: Request) {
   try {
-    const { phone, password, groupCode } = await req.json()
+    const { phone, password, groupCode, organizationId } = await req.json()
 
     if (!phone || !password) {
       return NextResponse.json({ error: "Phone and password are required" }, { status: 400 })
@@ -14,7 +14,9 @@ export async function POST(req: Request) {
     const cleanPhone = phone.trim()
     let whereClause: any = { phone: cleanPhone }
 
-    if (groupCode) {
+    if (organizationId) {
+      whereClause.organizationId = organizationId
+    } else if (groupCode) {
       const org = await prisma.organization.findUnique({
         where: { groupCode: groupCode.trim().toUpperCase() },
       })
@@ -23,6 +25,7 @@ export async function POST(req: Request) {
       }
       whereClause.organizationId = org.id
     }
+
 
     const member = await prisma.member.findFirst({
       where: whereClause,

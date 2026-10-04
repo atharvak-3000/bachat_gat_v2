@@ -5,19 +5,33 @@ import { createAuthToken, toSafeMember } from "@/lib/auth"
 
 export async function POST(req: Request) {
   try {
-    const { email, password } = await req.json()
+    const { email, password, organizationId, groupCode } = await req.json()
 
     if (!email || !password) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
     }
 
+    const whereClause: any = {
+      email: email.trim().toLowerCase(),
+      role: { in: ["SUPERADMIN", "ADMIN"] },
+    }
+
+    if (organizationId) {
+      whereClause.organizationId = organizationId
+    } else if (groupCode) {
+      const org = await prisma.organization.findUnique({
+        where: { groupCode: groupCode.trim().toUpperCase() },
+      })
+      if (org) {
+        whereClause.organizationId = org.id
+      }
+    }
+
     const member = await prisma.member.findFirst({
-      where: {
-        email: email.trim().toLowerCase(),
-        role: "SUPERADMIN",
-      },
+      where: whereClause,
       include: { organization: true },
     })
+
 
     if (!member || !member.passwordHash) {
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 })
