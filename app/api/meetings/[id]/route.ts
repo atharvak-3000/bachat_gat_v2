@@ -60,6 +60,42 @@ export async function GET(
     )
     const activeLoans = safeLoans.filter((l: any) => l.status === "ACTIVE")
 
+    // Calculate prior savings for each member from previous finalized meetings
+    const priorFinalizedMeetings = await prisma.meeting.findMany({
+      where: {
+        organizationId: performer.organizationId,
+        status: "FINALIZED",
+        id: { not: id },
+        OR: [
+          { meetingDate: { lt: rawMeeting.meetingDate } },
+          {
+            meetingDate: rawMeeting.meetingDate,
+            createdAt: { lt: rawMeeting.createdAt },
+          },
+        ],
+      },
+      select: { id: true },
+    })
+
+    const priorMeetingIds = priorFinalizedMeetings.map((m) => m.id)
+    const priorSavingsByMember: Record<string, number> = {}
+
+    if (priorMeetingIds.length > 0) {
+      const priorContributions = await prisma.meetingContribution.groupBy({
+        by: ["memberId"],
+        where: {
+          meetingId: { in: priorMeetingIds },
+        },
+        _sum: {
+          savingsAmount: true,
+        },
+      })
+
+      priorContributions.forEach((pc: any) => {
+        priorSavingsByMember[pc.memberId] = Number(pc._sum.savingsAmount || 0)
+      })
+    }
+
     return NextResponse.json({
       meeting: normalizePrismaObject(rawMeeting),
       contributions: normalizePrismaObject(safeContributions || []),
@@ -68,6 +104,7 @@ export async function GET(
       loans_issued: normalizePrismaObject(loansIssued),
       active_loans: normalizePrismaObject(activeLoans),
       org_settings: normalizePrismaObject(orgSettings),
+      prior_savings_by_member: priorSavingsByMember,
     })
 
   } catch (error: any) {

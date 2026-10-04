@@ -8,7 +8,8 @@ import {
   formatRupees,
   formatMonthYear,
   toP,
-  toR
+  toR,
+  calcMonthlyInterest
 } from "@/lib/calculations"
 import type {
   Meeting,
@@ -39,6 +40,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
   // Data states
   const [meeting, setMeeting] = useState<any | null>(null)
   const [contribs, setContribs] = useState<Record<string, any>>({})
+  const [priorSavings, setPriorSavings] = useState<Record<string, number>>({})
   const [expenses, setExpenses] = useState<MeetingExpense[]>([])
   const [incomes, setIncomes] = useState<MeetingIncome[]>([])
   const [issuedLoans, setIssuedLoans] = useState<LoanWithMember[]>([])
@@ -92,13 +94,25 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
       closedLabel: "बंद झाली:",
       finalizedBadge: "✓ सभा अंतिम झाली",
       draftBadge: "नोंदणी सुरू",
-      contributionsHeader: "मासिक वर्गणी व हप्ते",
-      contributionsSub: "प्रत्येक सदस्यासाठी मासिक बचत, दंड आणि कर्ज फेडीची नोंद करा.",
-      presentLabel: "उपस्थित",
-      savingsLabel: "बचत ₹",
+      contributionsHeader: "बचत गटाची हिशोब नोंद (वर्गणी व देणी-घेणी)",
+      contributionsSub: "प्रत्येक सदस्याचे येणे (मागील बचत व कर्ज) आणि जमा (चालू बचत, दंड, कर्ज हप्ता, व्याज व नवीन कर्ज) नोंदवा.",
+      yeneSectionTitle: "१. येणे (मागील व देय स्थिती)",
+      jamaSectionTitle: "२. जमा (चालू सभेतील नोंदी)",
+      totalSavingsLabel: "एकूण बचत",
+      loanDueLabel: "शिल्लक कर्ज",
+      interestDueLabel: "येणे व्याज",
+      currentSavingsLabel: "चालू बचत ₹",
       penaltyLabel: "दंड ₹",
-      loanRepaidLabel: "कर्ज वसुली ₹",
-      interestLabel: "व्याज ₹",
+      loanRepaidLabel: "कर्ज परतफेड ₹",
+      interestPaidLabel: "व्याज भरणा ₹",
+      totalDepositedLabel: "एकूण जमा ₹",
+      loanDisbursedLabel: "दिलेले कर्ज ₹",
+      memberCol: "सदस्य",
+      memberCodeCol: "#",
+      memberNameLabel: "सभासदाचे नाव",
+      presentLabel: "हजेरी",
+      tableTotalLabel: "एकूण (Total)",
+      savingsLabel: "बचत ₹",
       outstandingLabel: "थकीत रक्कम:",
       loansHeader: "दिलेले कर्ज",
       loansSub: "या सभेदरम्यान सदस्यांना नवीन कर्ज मंजूर करा.",
@@ -106,10 +120,10 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
       selectMemberOption: "-- सदस्य निवडा --",
       amountLabel: "रक्कम (₹)",
       amountPlaceholder: "रुपये",
-      rateLabel: "व्याज दर (% वार्षिक)",
+      rateLabel: "व्याज दर (% मासिक/वार्षिक)",
       termLabel: "मुदत (महिने)",
       purposeLabel: "हेतू",
-      purposePlaceholder: "उदा. वैद्यकीय",
+      purposePlaceholder: "उदा. शेती / व्यवसाय / वैद्यकीय",
       guarantorLabel: "जामीनदार निवडा (पर्यायी)",
       adminHint: "* अध्यक्षांनी मंजूर केलेले &rarr; सुपरअध्यक्ष मंजुरीची प्रतीक्षा | सुपरअध्यक्षांनी मंजूर केलेले &rarr; स्वयंचलित मंजूर",
       issueLoanBtn: "कर्ज मंजूर करा",
@@ -152,7 +166,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
       finalizeBtn: "सभा अंतिम करा",
       finalizingText: "अंतिम करत आहे...",
       onlySuperadminNotice: "⏳ केवळ SuperAdmin बैठक अंतिम करू शकतो.",
-      savingIndicator: "जतन करत आहे...",
+      savingIndicator: "जतन होत आहे...",
       errorText: "त्रुटी",
       meetingNotFound: "सभा आढळली नाही",
       backBtn: "सभा सूचीवर परत जा",
@@ -175,13 +189,25 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
       closedLabel: "Closed:",
       finalizedBadge: "✓ Meeting Finalized",
       draftBadge: "Draft / Entry In Progress",
-      contributionsHeader: "Member Contributions",
-      contributionsSub: "Record monthly savings, penalties, and loan repayments per member.",
-      presentLabel: "Present",
-      savingsLabel: "Savings ₹",
+      contributionsHeader: "Member Ledger (Contributions & Loans)",
+      contributionsSub: "Record each member's receivables (prior savings & loans) and receipts (current savings, penalty, repayment, interest & disbursed loans).",
+      yeneSectionTitle: "1. Receivables & Position (येणे)",
+      jamaSectionTitle: "2. Receipts & Disbursements (जमा)",
+      totalSavingsLabel: "Total Savings",
+      loanDueLabel: "Loan Due",
+      interestDueLabel: "Interest Due",
+      currentSavingsLabel: "Current Savings ₹",
       penaltyLabel: "Penalty ₹",
       loanRepaidLabel: "Loan Repaid ₹",
-      interestLabel: "Interest ₹",
+      interestPaidLabel: "Interest Paid ₹",
+      totalDepositedLabel: "Total Deposited ₹",
+      loanDisbursedLabel: "Loan Disbursed ₹",
+      memberCol: "Member",
+      memberCodeCol: "#",
+      memberNameLabel: "Member Name",
+      presentLabel: "Present",
+      tableTotalLabel: "Total",
+      savingsLabel: "Savings ₹",
       outstandingLabel: "Outstanding:",
       loansHeader: "Loans Issued in Meeting",
       loansSub: "Issue new loans to members during this meeting.",
@@ -192,7 +218,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
       rateLabel: "Rate (% p.a.)",
       termLabel: "Term (Months)",
       purposeLabel: "Purpose",
-      purposePlaceholder: "e.g. Medical",
+      purposePlaceholder: "e.g. Agriculture / Medical",
       guarantorLabel: "Select Guarantor (Optional)",
       adminHint: "* Admin issued &rarr; Awaiting SuperAdmin approval | SuperAdmin issued &rarr; Auto-approved",
       issueLoanBtn: "Issue Loan",
@@ -267,6 +293,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
       setIssuedLoans(data.loans_issued || [])
       setActiveLoans(data.active_loans || [])
       setOrgSettings(data.org_settings)
+      setPriorSavings(data.prior_savings_by_member || {})
 
       // Map contributions to Record<member_id, contribution>
       const contribMap: Record<string, any> = {}
@@ -825,74 +852,176 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
               ) : (
                 filteredContributions.map((c: any, i) => {
                   const mId = c.member_id || c.memberId
-                  const outstanding = getMemberOutstanding(mId)
                   const isAbsent = !(c.is_present ?? c.isPresent)
                   const memberCode = c.member?.member_number ?? c.member?.memberNumber ?? (i + 1)
+                  const memberName = c.member?.name || (lang === 'mr' ? c.member?.name_marathi || c.member?.nameMarathi : c.member?.name)
+
+                  // Section 1: येणे (Receivables & Position)
+                  const priorSavingPaise = Number(priorSavings[mId] || 0)
+                  const currentSavingPaise = Number(c.savings_amount ?? c.savingsAmount ?? 0)
+                  const totalSavingsPaise = priorSavingPaise + currentSavingPaise
+
+                  const activeLoan = activeLoans.find((l: any) => (l.member_id || l.memberId) === mId)
+                  const loanOutstandingPaise = activeLoan ? Number(activeLoan.outstanding_amount ?? activeLoan.outstandingAmount ?? 0) : 0
+                  const loanRate = activeLoan ? Number(activeLoan.interest_rate ?? activeLoan.interestRate ?? 2.0) : 2.0
+                  const interestDuePaise = activeLoan ? calcMonthlyInterest(loanOutstandingPaise, loanRate) : 0
+
+                  // Section 2: जमा (Receipts & Disbursements)
+                  const penaltyPaise = Number(c.penalty_paid ?? c.penaltyPaid ?? 0)
+                  const loanRepaidPaise = Number(c.loan_repayment ?? c.loanRepayment ?? 0)
+                  const interestPaidPaise = Number(c.interest_paid ?? c.interestPaid ?? 0)
+                  const otherAmtPaise = Number(c.other_amount ?? c.otherAmount ?? 0)
+                  const totalDepositedPaise = currentSavingPaise + penaltyPaise + loanRepaidPaise + interestPaidPaise + otherAmtPaise
+
+                  // Loan issued in this meeting to this member
+                  const memberLoansDisbursedPaise = issuedLoans
+                    .filter((l: any) => (l.member_id || l.memberId) === mId && !['REJECTED', 'CANCELLED'].includes(l.status))
+                    .reduce((sum, l: any) => sum + Number(l.loan_amount ?? l.loanAmount ?? 0), 0)
 
                   return (
-                    <div key={c.id || mId}
-                         className={`p-4 ${isAbsent ? 'bg-gray-50 dark:bg-gray-900/20 opacity-70' : ''}`}>
-                      
-                      {/* Member + Present toggle */}
-                      <div className="flex items-center justify-between mb-3">
+                    <div
+                      key={c.id || mId}
+                      className={`p-4 space-y-3.5 ${isAbsent ? 'bg-gray-50/70 dark:bg-gray-900/30 opacity-75' : ''}`}
+                    >
+                      {/* Header: Member Code + Name + Present toggle */}
+                      <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-bold bg-orange-50 text-[#E85D26] dark:bg-orange-950/40 dark:text-orange-400 border border-orange-200 dark:border-orange-900/50">
+                          <span className="inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-mono font-bold bg-orange-50 text-[#E85D26] dark:bg-orange-950/40 dark:text-orange-400 border border-orange-200 dark:border-orange-900/50">
                             #{memberCode}
                           </span>
-                          <div>
-                            <p className="font-bold text-gray-900 dark:text-white text-sm">
-                              {c.member?.name}
-                            </p>
-                            {outstanding > 0 && (
-                              <p className="text-xs text-orange-600 dark:text-orange-400 mt-0.5 font-medium">
-                                {t.outstandingLabel} {formatRupees(outstanding)}
-                              </p>
-                            )}
-                          </div>
+                          <span className="font-bold text-gray-900 dark:text-white text-sm">
+                            {memberName}
+                          </span>
                         </div>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <span className="text-xs text-gray-500 dark:text-gray-400 font-semibold">{t.presentLabel}</span>
+                        <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-gray-950 px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-800 shadow-xs">
+                          <span className="text-xs text-gray-600 dark:text-gray-400 font-semibold">{t.presentLabel}</span>
                           <input
                             type="checkbox"
                             checked={c.is_present ?? c.isPresent}
                             disabled={isFinalized}
-                            onChange={e => handlePresenceToggle(mId, e.target.checked)}
-                            className="w-5 h-5 accent-orange-500 rounded cursor-pointer disabled:cursor-not-allowed"
+                            onChange={(e) => handlePresenceToggle(mId, e.target.checked)}
+                            className="w-4 h-4 accent-orange-500 rounded cursor-pointer disabled:cursor-not-allowed"
                           />
                         </label>
                       </div>
 
-                      {/* 2x2 input grid */}
-                      <div className="grid grid-cols-2 gap-2">
-                        {[
-                          { label: t.savingsLabel, field: 'savings_amount', valKey: 'savingsAmount', disabled: isAbsent },
-                          { label: t.penaltyLabel, field: 'penalty_paid', valKey: 'penaltyPaid', disabled: false },
-                          { label: t.loanRepaidLabel, field: 'loan_repayment', valKey: 'loanRepayment', disabled: isAbsent },
-                          { label: t.interestLabel, field: 'interest_paid', valKey: 'interestPaid', disabled: isAbsent },
-                        ].map(({ label, field, valKey, disabled }) => (
-                          <div key={field}>
-                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">
-                              {label}
+                      {/* Section 1: येणे (Receivables & Position) */}
+                      <div className="bg-blue-50/50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40 rounded-xl p-3">
+                        <div className="text-[11px] font-bold text-blue-900 dark:text-blue-300 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                          <span>📋</span>
+                          <span>{t.yeneSectionTitle}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                          <div className="bg-white/80 dark:bg-gray-900/80 p-2 rounded-lg border border-blue-100/50 dark:border-blue-900/20">
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400 block">{t.totalSavingsLabel}</span>
+                            <span className="text-xs font-bold text-blue-700 dark:text-blue-400">{formatRupees(totalSavingsPaise)}</span>
+                          </div>
+                          <div className="bg-white/80 dark:bg-gray-900/80 p-2 rounded-lg border border-blue-100/50 dark:border-blue-900/20">
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400 block">{t.loanDueLabel}</span>
+                            <span className={`text-xs font-bold ${loanOutstandingPaise > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400'}`}>
+                              {loanOutstandingPaise > 0 ? formatRupees(loanOutstandingPaise) : '—'}
+                            </span>
+                          </div>
+                          <div className="bg-white/80 dark:bg-gray-900/80 p-2 rounded-lg border border-blue-100/50 dark:border-blue-900/20">
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400 block">{t.interestDueLabel}</span>
+                            <span className={`text-xs font-bold ${interestDuePaise > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-gray-400'}`}>
+                              {interestDuePaise > 0 ? formatRupees(interestDuePaise) : '—'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section 2: जमा (Receipts & Disbursements Inputs) */}
+                      <div className="bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 rounded-xl p-3 space-y-3">
+                        <div className="text-[11px] font-bold text-emerald-900 dark:text-emerald-300 uppercase tracking-wide flex items-center gap-1.5">
+                          <span>💰</span>
+                          <span>{t.jamaSectionTitle}</span>
+                        </div>
+
+                        {/* 2x2 Input Grid */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[11px] text-gray-600 dark:text-gray-400 font-semibold mb-1 block">
+                              {t.currentSavingsLabel}
                             </label>
                             <div className="relative">
                               <input
-                                type="number" min="0"
-                                value={toR(c[field] ?? c[valKey] ?? 0)}
-                                disabled={isFinalized || disabled}
-                                onChange={e => handleCellChange(
-                                  mId,
-                                  field,
-                                  toP(e.target.value)
-                                )}
-                                className="w-full border border-gray-200 dark:border-gray-800 rounded-lg 
-                                           px-2.5 py-2 text-sm outline-none
-                                           focus:border-orange-500 dark:bg-gray-950 dark:text-white
-                                           disabled:bg-gray-100 dark:disabled:bg-gray-900/50 transition"
+                                type="number"
+                                min="0"
+                                value={toR(currentSavingPaise)}
+                                disabled={isFinalized || isAbsent}
+                                onChange={(e) => handleCellChange(mId, 'savings_amount', toP(e.target.value))}
+                                className="w-full border border-gray-200 dark:border-gray-800 rounded-lg px-2.5 py-1.5 text-xs text-right outline-none focus:border-orange-500 dark:bg-gray-950 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-900/50 transition font-medium"
                               />
-                              {renderCellStatus(mId, field)}
+                              {renderCellStatus(mId, 'savings_amount')}
                             </div>
                           </div>
-                        ))}
+
+                          <div>
+                            <label className="text-[11px] text-gray-600 dark:text-gray-400 font-semibold mb-1 block">
+                              {t.penaltyLabel}
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                min="0"
+                                value={toR(penaltyPaise)}
+                                disabled={isFinalized}
+                                onChange={(e) => handleCellChange(mId, 'penalty_paid', toP(e.target.value))}
+                                className="w-full border border-gray-200 dark:border-gray-800 rounded-lg px-2.5 py-1.5 text-xs text-right outline-none focus:border-orange-500 dark:bg-gray-950 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-900/50 transition font-semibold text-red-600 dark:text-red-400"
+                              />
+                              {renderCellStatus(mId, 'penalty_paid')}
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-[11px] text-gray-600 dark:text-gray-400 font-semibold mb-1 block">
+                              {t.loanRepaidLabel}
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                min="0"
+                                value={toR(loanRepaidPaise)}
+                                disabled={isFinalized || isAbsent}
+                                onChange={(e) => handleCellChange(mId, 'loan_repayment', toP(e.target.value))}
+                                className="w-full border border-gray-200 dark:border-gray-800 rounded-lg px-2.5 py-1.5 text-xs text-right outline-none focus:border-orange-500 dark:bg-gray-950 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-900/50 transition font-medium"
+                              />
+                              {renderCellStatus(mId, 'loan_repayment')}
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-[11px] text-gray-600 dark:text-gray-400 font-semibold mb-1 block">
+                              {t.interestPaidLabel}
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                min="0"
+                                value={toR(interestPaidPaise)}
+                                disabled={isFinalized || isAbsent}
+                                onChange={(e) => handleCellChange(mId, 'interest_paid', toP(e.target.value))}
+                                className="w-full border border-gray-200 dark:border-gray-800 rounded-lg px-2.5 py-1.5 text-xs text-right outline-none focus:border-orange-500 dark:bg-gray-950 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-900/50 transition font-medium"
+                              />
+                              {renderCellStatus(mId, 'interest_paid')}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Calculated total & loan disbursed */}
+                        <div className="flex items-center justify-between pt-2 border-t border-emerald-100 dark:border-emerald-900/40 text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-gray-600 dark:text-gray-400 font-medium">{t.totalDepositedLabel}:</span>
+                            <span className="font-extrabold text-emerald-700 dark:text-emerald-400">{formatRupees(totalDepositedPaise)}</span>
+                          </div>
+                          {memberLoansDisbursedPaise > 0 && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-amber-700 dark:text-amber-400 font-medium">{t.loanDisbursedLabel}:</span>
+                              <span className="font-extrabold text-amber-700 dark:text-amber-400">{formatRupees(memberLoansDisbursedPaise)}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )
@@ -900,23 +1029,48 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
               )}
             </div>
 
+            {/* DESKTOP DUAL-SECTION LEDGER TABLE */}
             <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full text-left border-collapse min-w-[980px]">
                 <thead>
-                  <tr className="bg-gray-50 dark:bg-gray-950 text-gray-500 dark:text-gray-400 font-semibold text-xs border-b border-gray-100 dark:border-gray-800">
-                    <th className="px-4 py-3 text-center">{lang === 'mr' ? 'सदस्य कोड' : 'Member Code'}</th>
-                    <th className="px-4 py-3">{t.loansListHeader}</th>
-                    <th className="px-4 py-3 text-center">{t.presentLabel}</th>
-                    <th className="px-4 py-3 w-28">{t.savingsLabel}</th>
-                    <th className="px-4 py-3 w-28">{t.penaltyLabel}</th>
-                    <th className="px-4 py-3 w-28">{t.loanRepaidLabel}</th>
-                    <th className="px-4 py-3 w-28">{t.interestLabel}</th>
+                  {/* Tier 1 Group Header */}
+                  <tr className="border-b border-gray-200 dark:border-gray-800 text-xs uppercase tracking-wider font-bold">
+                    <th colSpan={3} className="px-3 py-2.5 bg-gray-100/70 dark:bg-gray-900/60 text-gray-700 dark:text-gray-300 text-center border-r border-gray-200 dark:border-gray-800">
+                      {t.memberCol}
+                    </th>
+                    <th colSpan={3} className="px-3 py-2.5 bg-blue-100/70 dark:bg-blue-950/60 text-blue-900 dark:text-blue-200 text-center border-r border-blue-200 dark:border-blue-900/60 font-black">
+                      {t.yeneSectionTitle}
+                    </th>
+                    <th colSpan={6} className="px-3 py-2.5 bg-emerald-100/70 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-200 text-center font-black">
+                      {t.jamaSectionTitle}
+                    </th>
+                  </tr>
+
+                  {/* Tier 2 Column Headers */}
+                  <tr className="bg-gray-50 dark:bg-gray-950 text-gray-600 dark:text-gray-400 font-semibold text-xs border-b border-gray-200 dark:border-gray-800">
+                    <th className="px-2 py-3 text-center w-12">{t.memberCodeCol}</th>
+                    <th className="px-3 py-3 min-w-[130px]">{t.memberNameLabel}</th>
+                    <th className="px-2 py-3 text-center w-14 border-r border-gray-200 dark:border-gray-800">{t.presentLabel}</th>
+
+                    {/* Section 1: येणे */}
+                    <th className="px-2.5 py-3 text-right bg-blue-50/40 dark:bg-blue-950/20 text-blue-900 dark:text-blue-300 min-w-[90px]">{t.totalSavingsLabel}</th>
+                    <th className="px-2.5 py-3 text-right bg-blue-50/40 dark:bg-blue-950/20 text-blue-900 dark:text-blue-300 min-w-[90px]">{t.loanDueLabel}</th>
+                    <th className="px-2.5 py-3 text-right bg-blue-50/40 dark:bg-blue-950/20 text-blue-900 dark:text-blue-300 min-w-[85px] border-r border-blue-200/60 dark:border-blue-900/40">{t.interestDueLabel}</th>
+
+                    {/* Section 2: जमा */}
+                    <th className="px-2 py-3 min-w-[95px]">{t.currentSavingsLabel}</th>
+                    <th className="px-2 py-3 min-w-[80px]">{t.penaltyLabel}</th>
+                    <th className="px-2 py-3 min-w-[95px]">{t.loanRepaidLabel}</th>
+                    <th className="px-2 py-3 min-w-[90px]">{t.interestPaidLabel}</th>
+                    <th className="px-2.5 py-3 text-right bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-900 dark:text-emerald-300 min-w-[95px] font-bold">{t.totalDepositedLabel}</th>
+                    <th className="px-2.5 py-3 text-right bg-amber-50/50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-300 min-w-[95px] font-bold">{t.loanDisbursedLabel}</th>
                   </tr>
                 </thead>
+
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800 text-sm">
                   {filteredContributions.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-10 text-center text-gray-500 dark:text-gray-400">
+                      <td colSpan={12} className="px-4 py-10 text-center text-gray-500 dark:text-gray-400">
                         <p className="font-semibold text-sm text-gray-700 dark:text-gray-200">
                           {lang === 'mr' ? `"${memberSearchQuery}" साठी कोणताही सदस्य सापडला नाही.` : `No member found matching "${memberSearchQuery}".`}
                         </p>
@@ -935,84 +1089,243 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                   ) : (
                     filteredContributions.map((c: any, i) => {
                       const mId = c.member_id || c.memberId
-                      const outstanding = getMemberOutstanding(mId)
                       const isPresent = c.is_present ?? c.isPresent
-                      const rowOpacity = isPresent ? "opacity-100" : "opacity-60 bg-gray-50/50 dark:bg-gray-900/20"
                       const memberCode = c.member?.member_number ?? c.member?.memberNumber ?? (i + 1)
-                      
+                      const memberName = c.member?.name || (lang === 'mr' ? c.member?.name_marathi || c.member?.nameMarathi : c.member?.name)
+
+                      // Section 1: येणे calculations
+                      const priorSavingPaise = Number(priorSavings[mId] || 0)
+                      const currentSavingPaise = Number(c.savings_amount ?? c.savingsAmount ?? 0)
+                      const totalSavingsPaise = priorSavingPaise + currentSavingPaise
+
+                      const activeLoan = activeLoans.find((l: any) => (l.member_id || l.memberId) === mId)
+                      const loanOutstandingPaise = activeLoan ? Number(activeLoan.outstanding_amount ?? activeLoan.outstandingAmount ?? 0) : 0
+                      const loanRate = activeLoan ? Number(activeLoan.interest_rate ?? activeLoan.interestRate ?? 2.0) : 2.0
+                      const interestDuePaise = activeLoan ? calcMonthlyInterest(loanOutstandingPaise, loanRate) : 0
+
+                      // Section 2: जमा calculations
+                      const penaltyPaise = Number(c.penalty_paid ?? c.penaltyPaid ?? 0)
+                      const loanRepaidPaise = Number(c.loan_repayment ?? c.loanRepayment ?? 0)
+                      const interestPaidPaise = Number(c.interest_paid ?? c.interestPaid ?? 0)
+                      const otherAmtPaise = Number(c.other_amount ?? c.otherAmount ?? 0)
+                      const totalDepositedPaise = currentSavingPaise + penaltyPaise + loanRepaidPaise + interestPaidPaise + otherAmtPaise
+
+                      // Loan issued in this meeting to this member
+                      const memberLoansDisbursedPaise = issuedLoans
+                        .filter((l: any) => (l.member_id || l.memberId) === mId && !['REJECTED', 'CANCELLED'].includes(l.status))
+                        .reduce((sum, l: any) => sum + Number(l.loan_amount ?? l.loanAmount ?? 0), 0)
+
                       return (
-                        <tr key={c.id || mId} className={`${rowOpacity} hover:bg-orange-50/5 dark:hover:bg-gray-900/30 transition-colors duration-150`}>
-                          <td className="px-4 py-4 text-center">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-bold bg-orange-50 text-[#E85D26] dark:bg-orange-950/40 dark:text-orange-400 border border-orange-200 dark:border-orange-900/50">
+                        <tr
+                          key={c.id || mId}
+                          className={`${isPresent ? "opacity-100" : "opacity-60 bg-gray-50/50 dark:bg-gray-900/20"} hover:bg-orange-50/10 dark:hover:bg-gray-900/30 transition-colors duration-150`}
+                        >
+                          {/* Member Code */}
+                          <td className="px-2 py-3 text-center">
+                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-mono font-bold bg-orange-50 text-[#E85D26] dark:bg-orange-950/40 dark:text-orange-400 border border-orange-200 dark:border-orange-900/50">
                               #{memberCode}
                             </span>
                           </td>
-                          <td className="px-4 py-4">
-                            <div className="font-bold text-gray-900 dark:text-white">{c.member?.name}</div>
-                            {outstanding > 0 && (
-                              <div className="text-[11px] text-orange-600 dark:text-orange-400 font-medium mt-0.5">
-                                {t.outstandingLabel} {formatRupees(outstanding)}
-                              </div>
+
+                          {/* Member Name */}
+                          <td className="px-3 py-3">
+                            <div className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">
+                              {memberName}
+                            </div>
+                          </td>
+
+                          {/* Present Checkbox */}
+                          <td className="px-2 py-3 text-center border-r border-gray-200 dark:border-gray-800">
+                            <input
+                              type="checkbox"
+                              disabled={isFinalized}
+                              checked={isPresent}
+                              onChange={(e) => handlePresenceToggle(mId, e.target.checked)}
+                              className="w-4 h-4 accent-orange-500 rounded cursor-pointer disabled:cursor-not-allowed"
+                            />
+                          </td>
+
+                          {/* 1. येणे: एकूण बचत */}
+                          <td className="px-2.5 py-3 text-right bg-blue-50/30 dark:bg-blue-950/10 font-bold text-blue-900 dark:text-blue-300 text-xs sm:text-sm">
+                            {formatRupees(totalSavingsPaise)}
+                          </td>
+
+                          {/* 1. येणे: शिल्लक कर्ज */}
+                          <td className="px-2.5 py-3 text-right bg-blue-50/30 dark:bg-blue-950/10 font-semibold text-gray-800 dark:text-gray-200 text-xs sm:text-sm">
+                            {loanOutstandingPaise > 0 ? (
+                              <span className="text-amber-600 dark:text-amber-400 font-bold">
+                                {formatRupees(loanOutstandingPaise)}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 dark:text-gray-600">—</span>
                             )}
                           </td>
-                        <td className="px-4 py-4 text-center">
-                          <input
-                            type="checkbox"
-                            disabled={isFinalized}
-                            checked={isPresent}
-                            onChange={(e) => handlePresenceToggle(mId, e.target.checked)}
-                            className="w-4.5 h-4.5 accent-orange-500 rounded-md outline-none cursor-pointer disabled:cursor-not-allowed"
-                          />
+
+                          {/* 1. येणे: येणे व्याज */}
+                          <td className="px-2.5 py-3 text-right bg-blue-50/30 dark:bg-blue-950/10 font-semibold text-gray-800 dark:text-gray-200 text-xs sm:text-sm border-r border-blue-200/60 dark:border-blue-900/40">
+                            {interestDuePaise > 0 ? (
+                              <span className="text-orange-600 dark:text-orange-400 font-bold">
+                                {formatRupees(interestDuePaise)}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 dark:text-gray-600">—</span>
+                            )}
+                          </td>
+
+                          {/* 2. जमा: चालू बचत */}
+                          <td className="px-1.5 py-2.5 relative">
+                            <input
+                              type="number"
+                              min="0"
+                              disabled={isFinalized || !isPresent}
+                              value={toR(currentSavingPaise)}
+                              onChange={(e) => handleCellChange(mId, 'savings_amount', toP(e.target.value))}
+                              className="w-full border border-gray-200 dark:border-gray-800 rounded-lg px-2 py-1 text-xs sm:text-sm text-right outline-none focus:border-orange-500 dark:bg-gray-950 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-900/50 transition font-medium"
+                            />
+                            {renderCellStatus(mId, 'savings_amount')}
+                          </td>
+
+                          {/* 2. जमा: दंड */}
+                          <td className="px-1.5 py-2.5 relative">
+                            <input
+                              type="number"
+                              min="0"
+                              disabled={isFinalized}
+                              value={toR(penaltyPaise)}
+                              onChange={(e) => handleCellChange(mId, 'penalty_paid', toP(e.target.value))}
+                              className="w-full border border-gray-200 dark:border-gray-800 rounded-lg px-2 py-1 text-xs sm:text-sm text-right outline-none focus:border-orange-500 dark:bg-gray-950 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-900/50 transition font-semibold text-red-600 dark:text-red-400"
+                            />
+                            {renderCellStatus(mId, 'penalty_paid')}
+                          </td>
+
+                          {/* 2. जमा: कर्ज परतफेड */}
+                          <td className="px-1.5 py-2.5 relative">
+                            <input
+                              type="number"
+                              min="0"
+                              disabled={isFinalized || !isPresent}
+                              value={toR(loanRepaidPaise)}
+                              onChange={(e) => handleCellChange(mId, 'loan_repayment', toP(e.target.value))}
+                              className="w-full border border-gray-200 dark:border-gray-800 rounded-lg px-2 py-1 text-xs sm:text-sm text-right outline-none focus:border-orange-500 dark:bg-gray-950 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-900/50 transition font-medium"
+                            />
+                            {renderCellStatus(mId, 'loan_repayment')}
+                          </td>
+
+                          {/* 2. जमा: व्याज भरणा */}
+                          <td className="px-1.5 py-2.5 relative">
+                            <input
+                              type="number"
+                              min="0"
+                              disabled={isFinalized || !isPresent}
+                              value={toR(interestPaidPaise)}
+                              onChange={(e) => handleCellChange(mId, 'interest_paid', toP(e.target.value))}
+                              className="w-full border border-gray-200 dark:border-gray-800 rounded-lg px-2 py-1 text-xs sm:text-sm text-right outline-none focus:border-orange-500 dark:bg-gray-950 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-900/50 transition font-medium"
+                            />
+                            {renderCellStatus(mId, 'interest_paid')}
+                          </td>
+
+                          {/* 2. जमा: एकूण जमा (Calculated Live) */}
+                          <td className="px-2.5 py-3 text-right bg-emerald-50/40 dark:bg-emerald-950/20 font-bold text-emerald-700 dark:text-emerald-400 text-xs sm:text-sm">
+                            {formatRupees(totalDepositedPaise)}
+                          </td>
+
+                          {/* 2. जमा: दिलेले कर्ज (Auto from loans section) */}
+                          <td className="px-2.5 py-3 text-right bg-amber-50/40 dark:bg-amber-950/20 font-bold text-amber-700 dark:text-amber-400 text-xs sm:text-sm">
+                            {memberLoansDisbursedPaise > 0 ? (
+                              formatRupees(memberLoansDisbursedPaise)
+                            ) : (
+                              <span className="text-gray-400 dark:text-gray-600 font-normal">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+
+                {/* Table Footer with Summary Columns */}
+                {filteredContributions.length > 0 && (() => {
+                  const totalColPriorSavings = filteredContributions.reduce((sum, c: any) => {
+                    const mId = c.member_id || c.memberId
+                    return sum + Number(priorSavings[mId] || 0)
+                  }, 0)
+                  const totalColCurrentSavings = filteredContributions.reduce((sum, c: any) => sum + Number(c.savings_amount ?? c.savingsAmount ?? 0), 0)
+                  const totalColTotalSavings = totalColPriorSavings + totalColCurrentSavings
+
+                  const totalColLoanOutstanding = filteredContributions.reduce((sum, c: any) => {
+                    const mId = c.member_id || c.memberId
+                    const al = activeLoans.find((l: any) => (l.member_id || l.memberId) === mId)
+                    return sum + (al ? Number(al.outstanding_amount ?? al.outstandingAmount ?? 0) : 0)
+                  }, 0)
+
+                  const totalColInterestDue = filteredContributions.reduce((sum, c: any) => {
+                    const mId = c.member_id || c.memberId
+                    const al = activeLoans.find((l: any) => (l.member_id || l.memberId) === mId)
+                    if (!al) return sum
+                    const out = Number(al.outstanding_amount ?? al.outstandingAmount ?? 0)
+                    const rate = Number(al.interest_rate ?? al.interestRate ?? 2.0)
+                    return sum + calcMonthlyInterest(out, rate)
+                  }, 0)
+
+                  const totalColPenalties = filteredContributions.reduce((sum, c: any) => sum + Number(c.penalty_paid ?? c.penaltyPaid ?? 0), 0)
+                  const totalColLoanRepaid = filteredContributions.reduce((sum, c: any) => sum + Number(c.loan_repayment ?? c.loanRepayment ?? 0), 0)
+                  const totalColInterestPaid = filteredContributions.reduce((sum, c: any) => sum + Number(c.interest_paid ?? c.interestPaid ?? 0), 0)
+                  const totalColTotalDeposited = filteredContributions.reduce((sum, c: any) => {
+                    const s = Number(c.savings_amount ?? c.savingsAmount ?? 0)
+                    const p = Number(c.penalty_paid ?? c.penaltyPaid ?? 0)
+                    const r = Number(c.loan_repayment ?? c.loanRepayment ?? 0)
+                    const i = Number(c.interest_paid ?? c.interestPaid ?? 0)
+                    const o = Number(c.other_amount ?? c.otherAmount ?? 0)
+                    return sum + s + p + r + i + o
+                  }, 0)
+
+                  const totalColLoansDisbursed = filteredContributions.reduce((sum, c: any) => {
+                    const mId = c.member_id || c.memberId
+                    const disbursed = issuedLoans
+                      .filter((l: any) => (l.member_id || l.memberId) === mId && !['REJECTED', 'CANCELLED'].includes(l.status))
+                      .reduce((s, l: any) => s + Number(l.loan_amount ?? l.loanAmount ?? 0), 0)
+                    return sum + disbursed
+                  }, 0)
+
+                  return (
+                    <tfoot>
+                      <tr className="bg-gray-100/90 dark:bg-gray-900 border-t-2 border-gray-300 dark:border-gray-700 text-xs font-bold text-gray-900 dark:text-white">
+                        <td colSpan={3} className="px-3 py-3 text-center border-r border-gray-200 dark:border-gray-800 font-black">
+                          {t.tableTotalLabel}
                         </td>
-                        <td className="px-4 py-4 relative">
-                          <input
-                            type="number"
-                            min="0"
-                            disabled={isFinalized || !isPresent}
-                            value={toR(c.savings_amount ?? c.savingsAmount ?? 0)}
-                            onChange={(e) => handleCellChange(mId, 'savings_amount', toP(e.target.value))}
-                            className="w-full border border-gray-200 dark:border-gray-800 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-orange-500 dark:bg-gray-950 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-900/50 transition"
-                          />
-                          {renderCellStatus(mId, 'savings_amount')}
+                        {/* 1. येणे Totals */}
+                        <td className="px-2.5 py-3 text-right bg-blue-100/60 dark:bg-blue-950/40 text-blue-950 dark:text-blue-200 font-extrabold">
+                          {formatRupees(totalColTotalSavings)}
                         </td>
-                        <td className="px-4 py-4 relative">
-                          <input
-                            type="number"
-                            min="0"
-                            disabled={isFinalized}
-                            value={toR(c.penalty_paid ?? c.penaltyPaid ?? 0)}
-                            onChange={(e) => handleCellChange(mId, 'penalty_paid', toP(e.target.value))}
-                            className="w-full border border-gray-200 dark:border-gray-800 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-orange-500 dark:bg-gray-950 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-900/50 transition font-semibold text-red-600 dark:text-red-400"
-                          />
-                          {renderCellStatus(mId, 'penalty_paid')}
+                        <td className="px-2.5 py-3 text-right bg-blue-100/60 dark:bg-blue-950/40 text-amber-700 dark:text-amber-300 font-extrabold">
+                          {formatRupees(totalColLoanOutstanding)}
                         </td>
-                        <td className="px-4 py-4 relative">
-                          <input
-                            type="number"
-                            min="0"
-                            disabled={isFinalized || !isPresent}
-                            value={toR(c.loan_repayment ?? c.loanRepayment ?? 0)}
-                            onChange={(e) => handleCellChange(mId, 'loan_repayment', toP(e.target.value))}
-                            className="w-full border border-gray-200 dark:border-gray-800 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-orange-500 dark:bg-gray-950 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-900/50 transition"
-                          />
-                          {renderCellStatus(mId, 'loan_repayment')}
+                        <td className="px-2.5 py-3 text-right bg-blue-100/60 dark:bg-blue-950/40 text-orange-700 dark:text-orange-300 font-extrabold border-r border-blue-200/60 dark:border-blue-900/40">
+                          {formatRupees(totalColInterestDue)}
                         </td>
-                        <td className="px-4 py-4 relative">
-                          <input
-                            type="number"
-                            min="0"
-                            disabled={isFinalized || !isPresent}
-                            value={toR(c.interest_paid ?? c.interestPaid ?? 0)}
-                            onChange={(e) => handleCellChange(mId, 'interest_paid', toP(e.target.value))}
-                            className="w-full border border-gray-200 dark:border-gray-800 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-orange-500 dark:bg-gray-950 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-900/50 transition"
-                          />
-                          {renderCellStatus(mId, 'interest_paid')}
+                        {/* 2. जमा Totals */}
+                        <td className="px-2 py-3 text-right font-extrabold">
+                          {formatRupees(totalColCurrentSavings)}
+                        </td>
+                        <td className="px-2 py-3 text-right font-extrabold text-red-600 dark:text-red-400">
+                          {formatRupees(totalColPenalties)}
+                        </td>
+                        <td className="px-2 py-3 text-right font-extrabold">
+                          {formatRupees(totalColLoanRepaid)}
+                        </td>
+                        <td className="px-2 py-3 text-right font-extrabold">
+                          {formatRupees(totalColInterestPaid)}
+                        </td>
+                        <td className="px-2.5 py-3 text-right bg-emerald-100/60 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-extrabold">
+                          {formatRupees(totalColTotalDeposited)}
+                        </td>
+                        <td className="px-2.5 py-3 text-right bg-amber-100/60 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 font-extrabold">
+                          {formatRupees(totalColLoansDisbursed)}
                         </td>
                       </tr>
-                    )
-                  })
-                )}
-                </tbody>
+                    </tfoot>
+                  )
+                })()}
               </table>
             </div>
           </div>
