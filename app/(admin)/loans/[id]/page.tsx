@@ -32,11 +32,6 @@ export default async function AdminLoanDetailsPage({
     redirect("/loans")
   }
 
-  const emis = await prisma.loanEmi.findMany({
-    where: { loanId: id },
-    orderBy: { monthYear: "asc" },
-  })
-
   const safeLoan = {
     ...loan,
     organization_id: loan.organizationId,
@@ -52,23 +47,9 @@ export default async function AdminLoanDetailsPage({
     guarantor: loan.guarantor,
   }
 
-  const safeEmis = emis.map((e: any) => ({
-    ...e,
-    loan_id: e.loanId,
-    month_year: e.monthYear,
-    due_date: e.dueDate.toISOString().split("T")[0],
-    principal_due: Number(e.principalDue),
-    interest_due: Number(e.interestDue),
-    principal_paid: Number(e.principalPaid),
-    interest_paid: Number(e.interestPaid),
-    fine_amount: Number(e.fineAmount),
-    paid_at: e.paidAt ? e.paidAt.toISOString() : null,
-  }))
-
   return (
     <LoanEmisClient
       loan={safeLoan as any}
-      initialEmis={safeEmis as any}
       role={performer.role}
     />
   )

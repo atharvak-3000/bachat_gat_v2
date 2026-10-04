@@ -8,7 +8,6 @@ import type { Loan, Member, Role } from "@/types"
 
 interface LoanWithDetails extends Loan {
   member: Member
-  overdue_count: number
 }
 
 export default function LoansClient({
@@ -42,15 +41,13 @@ export default function LoansClient({
   const T = {
     mr: {
       title: "कर्ज व्यवस्थापन",
-      sub: "मागणी केलेल्या कर्जांना मंजुरी द्या, थकीत शिल्लक ट्रॅक करा, मासिक EMI पहा आणि कर्ज वसुलीचे नियोजन करा.",
+      sub: "मागणी केलेल्या कर्जांना मंजुरी द्या, थकीत शिल्लक ट्रॅक करा आणि कर्ज वसुलीचे नियोजन करा.",
       activeLoans: "सक्रिय कर्ज",
       pendingApprovals: "मंजुरी प्रलंबित",
-      overdueAccounts: "थकीत खाती",
       totalOutstanding: "एकूण येणे कर्ज",
       tabAll: "सर्व",
       tabPending: "प्रलंबित",
       tabActive: "सक्रिय",
-      tabOverdue: "थकीत",
       tabClosed: "बंद झालेले",
       memberLabel: "सदस्य",
       guarantorLabel: "जामीनदार",
@@ -65,31 +62,27 @@ export default function LoansClient({
       approveBtn: "मंजूर करा",
       rejectBtn: "नाकारा",
       closeBtn: "कर्ज बंद करा",
-      viewEmisBtn: "EMI पहा",
       viewBtn: "पहा",
       pendingStatus: "Pending",
       activeStatus: "Active",
       closedStatus: "Closed",
       rejectedStatus: "Rejected",
-      overdueEmiWarning: "EMI थकीत",
-      approveConfirm: "आपण नक्की हे कर्ज मंजूर करू इच्छिता? यामुळे कर्ज वितरित होईल आणि EMI वेळापत्रक तयार होईल.",
+      approveConfirm: "आपण नक्की हे कर्ज मंजूर करू इच्छिता? यामुळे कर्ज वितरित होईल.",
       rejectConfirmPrompt: "कर्ज नाकारण्याचे कारण प्रविष्ट करा (ऐच्छिक):",
       rejectReasonDefault: "SuperAdmin द्वारे नाकारले",
-      closeConfirm: "आपण नक्की हे कर्ज बंद करू इच्छिता? यामुळे थकीत शिल्लक 0 होईल आणि सर्व EMI भरलेले दाखवले जातील.",
+      closeConfirm: "आपण नक्की हे कर्ज बंद करू इच्छिता? यामुळे थकीत शिल्लक 0 होईल.",
       noPurpose: "तपशील नाही",
       awaitingSuperAdminHint: "अध्यक्ष मंजूर (प्रलंबित)",
     },
     en: {
       title: "Loans Management",
-      sub: "Approve requested loans, track outstanding balances, view monthly EMIs, and manage recoveries.",
+      sub: "Approve requested loans, track outstanding balances, and manage recoveries.",
       activeLoans: "Active Loans",
       pendingApprovals: "Pending Approvals",
-      overdueAccounts: "Overdue Accounts",
       totalOutstanding: "Total Outstanding",
       tabAll: "All",
       tabPending: "Pending",
       tabActive: "Active",
-      tabOverdue: "Overdue",
       tabClosed: "Closed",
       memberLabel: "Member",
       guarantorLabel: "Guarantor",
@@ -104,17 +97,15 @@ export default function LoansClient({
       approveBtn: "Approve",
       rejectBtn: "Reject",
       closeBtn: "Close Loan",
-      viewEmisBtn: "View EMIs",
       viewBtn: "View",
       pendingStatus: "Pending",
       activeStatus: "Active",
       closedStatus: "Closed",
       rejectedStatus: "Rejected",
-      overdueEmiWarning: "EMI(s) overdue",
-      approveConfirm: "Are you sure you want to approve this loan? This will disburse the loan and generate the EMI schedule.",
+      approveConfirm: "Are you sure you want to approve this loan? This will disburse the loan.",
       rejectConfirmPrompt: "Please enter the reason for rejection (optional):",
       rejectReasonDefault: "Rejected by SuperAdmin",
-      closeConfirm: "Are you sure you want to manually CLOSE this loan? This will set outstanding balance to 0 and mark all EMIs as paid.",
+      closeConfirm: "Are you sure you want to manually CLOSE this loan? This will set outstanding balance to 0.",
       noPurpose: "No purpose",
       awaitingSuperAdminHint: "View (Pending)",
     }
@@ -140,7 +131,6 @@ export default function LoansClient({
   const activeLoans = loans.filter(l => l.status === 'ACTIVE')
   const pendingLoans = loans.filter(l => l.status === 'PENDING')
   const closedLoans = loans.filter(l => l.status === 'CLOSED' || l.status === 'REJECTED')
-  const overdueLoans = loans.filter(l => l.status === 'ACTIVE' && l.overdue_count > 0)
 
   const totalOutstanding = activeLoans.reduce((sum, l) => sum + l.outstanding_amount, 0)
 
@@ -149,7 +139,6 @@ export default function LoansClient({
     switch (tab) {
       case "pending": return pendingLoans
       case "active": return activeLoans
-      case "overdue": return overdueLoans
       case "closed": return closedLoans
       default: return loans
     }
@@ -226,7 +215,7 @@ export default function LoansClient({
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="bg-white border border-gray-100 dark:bg-[#1A1D27] dark:border-gray-800 p-4 md:p-6 rounded-3xl shadow-sm">
           <span className="text-[10px] md:text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider leading-tight block">{t.activeLoans}</span>
           <h4 className="text-lg md:text-2xl font-black text-[#2E4099] dark:text-blue-400 mt-1.5 md:mt-2">{activeLoans.length}</h4>
@@ -234,10 +223,6 @@ export default function LoansClient({
         <div className="bg-white border border-gray-100 dark:bg-[#1A1D27] dark:border-gray-800 p-4 md:p-6 rounded-3xl shadow-sm">
           <span className="text-[10px] md:text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider leading-tight block">{t.pendingApprovals}</span>
           <h4 className="text-lg md:text-2xl font-black text-[#E85D26] dark:text-orange-400 mt-1.5 md:mt-2">{pendingLoans.length}</h4>
-        </div>
-        <div className="bg-white border border-gray-100 dark:bg-[#1A1D27] dark:border-gray-800 p-4 md:p-6 rounded-3xl shadow-sm">
-          <span className="text-[10px] md:text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider leading-tight block">{t.overdueAccounts}</span>
-          <h4 className="text-lg md:text-2xl font-black text-red-600 dark:text-red-400 mt-1.5 md:mt-2">{overdueLoans.length}</h4>
         </div>
         <div className="bg-[#1B2B6B] border border-[#1B2B6B] dark:bg-[#0D1021] dark:border-blue-900/30 p-4 md:p-6 rounded-3xl shadow-md text-white">
           <span className="text-[10px] md:text-xs font-bold text-white/70 dark:text-white/60 uppercase tracking-wider leading-tight block">{t.totalOutstanding}</span>
@@ -251,7 +236,6 @@ export default function LoansClient({
           { id: "all", label: `${t.tabAll} (${loans.length})` },
           { id: "pending", label: `${t.tabPending} (${pendingLoans.length})` },
           { id: "active", label: `${t.tabActive} (${activeLoans.length})` },
-          { id: "overdue", label: `${t.tabOverdue} (${overdueLoans.length})` },
           { id: "closed", label: `${t.tabClosed} (${closedLoans.length})` }
         ].map(tInfo => (
           <button
@@ -277,12 +261,7 @@ export default function LoansClient({
           {/* MOBILE LOAN CARDS */}
           <div className="md:hidden space-y-3 p-4 bg-gray-50/50 dark:bg-gray-950/20">
             {filteredLoans.map(loan => (
-              <div key={loan.id}
-                   className={`bg-white dark:bg-[#1A1D27] rounded-2xl border p-4 shadow-sm ${
-                     loan.overdue_count > 0
-                       ? 'border-red-200 bg-red-50/20 dark:border-red-950/20 dark:bg-red-950/10'
-                       : 'border-gray-200 dark:border-gray-800'
-                   }`}>
+              <div key={loan.id} className="bg-white dark:bg-[#1A1D27] rounded-2xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm">
 
                 {/* Member + Status */}
                 <div className="flex items-start justify-between mb-3">
@@ -333,19 +312,11 @@ export default function LoansClient({
                   </div>
                 </div>
 
-                {/* Overdue warning */}
-                {loan.overdue_count > 0 && (
-                  <p className="text-xs text-red-600 dark:text-red-400 font-semibold mb-2 animate-pulse">
-                    ⚠️ {loan.overdue_count} {t.overdueEmiWarning}
-                  </p>
-                )}
-
                 {/* Actions */}
                 <div className="flex gap-2 flex-wrap pt-2 border-t border-gray-100 dark:border-gray-800">
                   <Link href={`/loans/${loan.id}`}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold
-                               border border-[#2E4099] dark:border-blue-900/50 text-[#2E4099] dark:text-blue-400 hover:bg-[#2E4099]/10 dark:hover:bg-blue-950/20 bg-white dark:bg-gray-950">
-                    {t.viewEmisBtn}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-[#2E4099] dark:border-blue-900/50 text-[#2E4099] dark:text-blue-400 hover:bg-[#2E4099]/10 dark:hover:bg-blue-950/20 bg-white dark:bg-gray-950">
+                    {t.viewBtn}
                   </Link>
                   {loan.status === 'PENDING' && 
                    currentRole === 'SUPERADMIN' && (
@@ -385,8 +356,7 @@ export default function LoansClient({
                    currentRole === 'SUPERADMIN' && (
                     <button
                       onClick={() => handleClose(loan.id)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold
-                                 border border-red-500 dark:border-red-900/50 text-red-500 dark:text-red-400 hover:bg-red-500 hover:text-white transition">
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-red-500 dark:border-red-900/50 text-red-500 dark:text-red-400 hover:bg-red-500 hover:text-white transition">
                       {t.closeBtn}
                     </button>
                   )}
@@ -412,20 +382,12 @@ export default function LoansClient({
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800 text-sm font-medium">
                 {filteredLoans.map(l => {
-                  const isOverdue = l.status === 'ACTIVE' && l.overdue_count > 0
-                  const rowBg = isOverdue 
-                    ? "bg-red-50/20 dark:bg-red-950/10 hover:bg-red-50/40 dark:hover:bg-red-950/20" 
-                    : "hover:bg-[#2E4099]/5 dark:hover:bg-blue-950/10"
+                  const rowBg = "hover:bg-[#2E4099]/5 dark:hover:bg-blue-950/10"
                   
                   return (
                     <tr key={l.id} className={`${rowBg} transition-colors`}>
                       <td className="px-6 py-4">
                         <div className="font-bold text-gray-900 dark:text-white">{l.member?.name}</div>
-                        {isOverdue && (
-                          <span className="text-[10px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/30 px-2 py-0.5 rounded-full mt-1 inline-block animate-pulse">
-                            ⚠️ {l.overdue_count} {t.overdueEmiWarning.toUpperCase()}
-                          </span>
-                        )}
                       </td>
                       <td className="px-6 py-4 text-gray-700 dark:text-gray-300">
                         {l.guarantor ? (
@@ -502,9 +464,9 @@ export default function LoansClient({
                           <div className="inline-flex gap-2">
                             <Link
                               href={`/loans/${l.id}`}
-                              className="inline-flex bg-[#E85D26] hover:bg-[#D04E1A] text-white font-bold px-3 py-1.5 rounded-xl text-xs active:scale-95 transition"
+                              className="inline-flex border border-[#2E4099] dark:border-blue-900/50 text-[#2E4099] dark:text-blue-400 hover:bg-[#2E4099]/10 dark:hover:bg-blue-950/20 font-bold px-3 py-1.5 rounded-xl text-xs active:scale-95 transition bg-white dark:bg-gray-950"
                             >
-                              {t.viewEmisBtn}
+                              {t.viewBtn}
                             </Link>
                             {isSuperAdmin && (
                               <button
