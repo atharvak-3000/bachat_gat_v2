@@ -60,6 +60,10 @@ export function toSafeMember<T extends Record<string, any>>(member: T | null | u
 
   const memberNum = safeMember.member_number ?? safeMember.memberNumber
   const joiningDate = safeMember.joining_date ?? safeMember.joiningDate
+  const kycStatus = safeMember.kyc_status ?? safeMember.kycStatus
+  const kycNotes = safeMember.kyc_notes ?? safeMember.kycNotes
+  const kycVerifiedAt = safeMember.kyc_verified_at ?? safeMember.kycVerifiedAt
+  const kycVerifiedBy = safeMember.kyc_verified_by ?? safeMember.kycVerifiedBy
 
   return toPlainObject({
     ...safeMember,
@@ -70,6 +74,14 @@ export function toSafeMember<T extends Record<string, any>>(member: T | null | u
     memberNumber: memberNum,
     joining_date: joiningDate,
     joiningDate: joiningDate,
+    kyc_status: kycStatus,
+    kycStatus: kycStatus,
+    kyc_notes: kycNotes,
+    kycNotes: kycNotes,
+    kyc_verified_at: kycVerifiedAt,
+    kycVerifiedAt: kycVerifiedAt,
+    kyc_verified_by: kycVerifiedBy,
+    kycVerifiedBy: kycVerifiedBy,
   })
 }
 

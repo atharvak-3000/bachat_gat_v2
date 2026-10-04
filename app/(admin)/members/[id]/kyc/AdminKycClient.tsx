@@ -136,9 +136,9 @@ export default function AdminKycClient({ member }: { member: Member }) {
         throw new Error(data.error || "Failed to update KYC status")
       }
 
+      // Redirect back to member profile after verification
+      router.push(`/members/${member.id}`)
       router.refresh()
-      // Force reload to get updated member object with verifier details
-      window.location.reload()
     } catch (err: any) {
       setError(err.message)
     } finally {
