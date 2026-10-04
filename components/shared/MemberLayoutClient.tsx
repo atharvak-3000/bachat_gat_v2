@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import NotificationBell from "./NotificationBell"
 import { getTranslation } from "@/lib/translations"
@@ -70,13 +71,17 @@ export default function MemberLayoutClient({
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 sm:px-6 h-16">
           {/* Logo & Desktop Navigation */}
           <div className="flex items-center gap-6">
-            <Link href="/member" className="flex items-center gap-2 group">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#E85D26] to-amber-400 flex items-center justify-center text-white font-black text-sm shadow">
-                BG
+            <Link href="/member" className="flex items-center gap-2 group py-1">
+              <div className="relative h-8 sm:h-9 w-32 sm:w-40 transition-transform duration-200 group-hover:scale-105">
+                <Image
+                  src="/logo-horizontal.png"
+                  alt="BachatGatOnline"
+                  fill
+                  sizes="(max-width: 640px) 128px, 160px"
+                  className="object-contain brightness-0 invert"
+                  priority
+                />
               </div>
-              <span className="font-bold text-white text-base sm:text-lg tracking-tight">
-                BachatGat<span className="text-[#E85D26]">Online</span>
-              </span>
             </Link>
 
             <nav className="hidden sm:flex items-center gap-2 ml-4">
