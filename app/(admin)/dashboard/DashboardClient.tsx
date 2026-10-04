@@ -136,17 +136,17 @@ export default function DashboardClient({
   const t = T[lang]
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8 animate-fadeIn">
+    <div className="px-4 py-5 sm:px-6 sm:py-8 max-w-7xl mx-auto space-y-6 sm:space-y-8 animate-fadeIn">
       {/* Alert banners block */}
       <div className="space-y-3">
         {/* Member request pending banner */}
         {pendingMembers.length > 0 && (
-          <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-2xl px-5 py-3.5 text-[#1B2B6B] dark:bg-blue-950/20 dark:border-blue-900/50 dark:text-white text-xs sm:text-sm font-semibold">
+          <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-2xl px-4 sm:px-5 py-3.5 text-[#1B2B6B] dark:bg-blue-950/20 dark:border-blue-900/50 dark:text-white text-xs sm:text-sm font-semibold gap-2">
             <div className="flex items-center gap-2">
               <span>👥</span>
               <span>{t.pendingRequestsBanner}</span>
             </div>
-            <Link href="/members?tab=pending" className="text-[#E85D26] hover:text-[#D04E1A] dark:text-orange-400 dark:hover:text-orange-350 underline text-xs font-bold font-mono">
+            <Link href="/members?tab=pending" className="text-[#E85D26] hover:text-[#D04E1A] dark:text-orange-400 dark:hover:text-orange-350 underline text-xs font-bold font-mono whitespace-nowrap">
               {t.reviewRequests}
             </Link>
           </div>
@@ -154,12 +154,12 @@ export default function DashboardClient({
 
         {/* Current meeting not created */}
         {!currentMeeting && (
-          <div className="flex items-center justify-between bg-orange-50/50 border border-[#E85D26]/20 rounded-2xl px-5 py-3.5 text-[#1B2B6B] dark:bg-orange-950/10 dark:border-orange-500/20 dark:text-white text-xs sm:text-sm font-semibold">
+          <div className="flex items-center justify-between bg-orange-50/50 border border-[#E85D26]/20 rounded-2xl px-4 sm:px-5 py-3.5 text-[#1B2B6B] dark:bg-orange-950/10 dark:border-orange-500/20 dark:text-white text-xs sm:text-sm font-semibold gap-2">
             <div className="flex items-center gap-2">
               <span>📅</span>
               <span>{t.noMeetingRecordedBanner}</span>
             </div>
-            <Link href="/meetings" className="text-[#E85D26] hover:text-[#D04E1A] dark:text-orange-400 dark:hover:text-orange-350 underline text-xs font-bold font-mono">
+            <Link href="/meetings" className="text-[#E85D26] hover:text-[#D04E1A] dark:text-orange-400 dark:hover:text-orange-350 underline text-xs font-bold font-mono whitespace-nowrap">
               {t.createMeeting}
             </Link>
           </div>
@@ -167,12 +167,12 @@ export default function DashboardClient({
 
         {/* Current meeting is DRAFT */}
         {currentMeeting && currentMeeting.status === 'DRAFT' && (
-          <div className="flex items-center justify-between bg-orange-50/50 border border-[#E85D26]/20 rounded-2xl px-5 py-3.5 text-[#1B2B6B] dark:bg-orange-950/10 dark:border-orange-500/20 dark:text-white text-xs sm:text-sm font-semibold">
+          <div className="flex items-center justify-between bg-orange-50/50 border border-[#E85D26]/20 rounded-2xl px-4 sm:px-5 py-3.5 text-[#1B2B6B] dark:bg-orange-950/10 dark:border-orange-500/20 dark:text-white text-xs sm:text-sm font-semibold gap-2">
             <div className="flex items-center gap-2">
               <span>📝</span>
               <span>{t.meetingNotFinalizedBanner}</span>
             </div>
-            <Link href={`/meetings/${currentMeeting.id}`} className="text-[#E85D26] hover:text-[#D04E1A] dark:text-orange-400 dark:hover:text-orange-350 underline text-xs font-bold font-mono">
+            <Link href={`/meetings/${currentMeeting.id}`} className="text-[#E85D26] hover:text-[#D04E1A] dark:text-orange-400 dark:hover:text-orange-350 underline text-xs font-bold font-mono whitespace-nowrap">
               {t.enterDataFinalize}
             </Link>
           </div>
@@ -180,12 +180,12 @@ export default function DashboardClient({
 
         {/* Loans approval pending */}
         {pendingLoanCount > 0 && performer.role === 'SUPERADMIN' && (
-          <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-2xl px-5 py-3.5 text-[#1B2B6B] dark:bg-blue-950/20 dark:border-blue-900/50 dark:text-white text-xs sm:text-sm font-semibold">
+          <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-2xl px-4 sm:px-5 py-3.5 text-[#1B2B6B] dark:bg-blue-950/20 dark:border-blue-900/50 dark:text-white text-xs sm:text-sm font-semibold gap-2">
             <div className="flex items-center gap-2">
               <span>💰</span>
               <span>{t.loansAwaitingBanner}</span>
             </div>
-            <Link href="/loans?tab=pending" className="text-[#E85D26] hover:text-[#D04E1A] dark:text-orange-400 dark:hover:text-orange-350 underline text-xs font-bold font-mono">
+            <Link href="/loans?tab=pending" className="text-[#E85D26] hover:text-[#D04E1A] dark:text-orange-400 dark:hover:text-orange-350 underline text-xs font-bold font-mono whitespace-nowrap">
               {t.approveLoans}
             </Link>
           </div>
@@ -193,12 +193,12 @@ export default function DashboardClient({
       </div>
 
       {/* Welcome Block */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-gray-100 dark:border-gray-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-gray-100 dark:border-gray-800">
         <div>
-          <h1 className="text-3xl font-black text-[#1B2B6B] dark:text-white">
+          <h1 className="text-2xl sm:text-3xl font-black text-[#1B2B6B] dark:text-white">
             {t.title}
           </h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">{t.sub}</p>
+          <p className="text-gray-500 dark:text-gray-400 text-xs sm:text-sm mt-1">{t.sub}</p>
         </div>
         <div className="flex items-center gap-3">
           <span className={`text-xs font-bold px-3.5 py-1.5 rounded-full ${roleBadge[performer.role]?.className}`}>
@@ -209,60 +209,51 @@ export default function DashboardClient({
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         {/* Card 1 — Active Members */}
-        <div className="bg-white border border-gray-100 dark:bg-[#1A1D27] dark:border-gray-800
-                        p-3 md:p-6 rounded-2xl md:rounded-3xl shadow-sm">
-          <div className="flex items-center justify-between 
-                          mb-2 md:mb-3 text-gray-400 dark:text-gray-500">
-            <span className="text-[10px] md:text-xs font-bold 
-                             uppercase tracking-wider leading-tight">
+        <div className="bg-white border border-gray-100 dark:bg-[#1A1D27] dark:border-gray-800 p-4 sm:p-5 md:p-6 rounded-2xl md:rounded-3xl shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2 md:mb-3 text-gray-400 dark:text-gray-500">
+            <span className="text-[10px] md:text-xs font-bold uppercase tracking-wider leading-tight">
               {t.activeMembersLabel}
             </span>
             <Image src="/Bachat Gat icons/Dashboard/Active Members.svg" alt="Active Members" width={24} height={24} />
           </div>
-          <p className="text-2xl md:text-3xl font-black text-[#1B2B6B] dark:text-white">
+          <p className="text-xl sm:text-2xl md:text-3xl font-black text-[#1B2B6B] dark:text-white">
             {activeMembers.length}
           </p>
         </div>
 
         {/* Card 2 — Total Corpus */}
-        <div className="bg-[#1B2B6B] border border-[#1B2B6B] dark:bg-[#0D1021] dark:border-gray-800
-                        p-3 md:p-6 rounded-2xl md:rounded-3xl shadow-lg text-white">
-          <div className="flex items-center justify-between 
-                          mb-2 md:mb-3 text-orange-400">
+        <div className="bg-[#1B2B6B] border border-[#1B2B6B] dark:bg-[#0D1021] dark:border-gray-800 p-4 sm:p-5 md:p-6 rounded-2xl md:rounded-3xl shadow-lg text-white flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2 md:mb-3 text-orange-400">
             <div>
-              <span className="text-[10px] md:text-xs font-bold 
-                               uppercase tracking-wider text-white/70">
+              <span className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-white/70">
                 {t.totalCorpusLabel}
               </span>
             </div>
             <Image src="/Bachat Gat icons/Dashboard/Total Corpus.svg" alt="Total Corpus" width={24} height={24} />
           </div>
-          <p className="text-lg md:text-2xl font-black text-white 
-                        leading-tight break-all">
+          <p className="text-base sm:text-xl md:text-2xl font-black text-white leading-tight break-all">
             {formatRupees(totalCorpus)}
           </p>
         </div>
 
         {/* Card 3 — Outstanding Loans */}
-        <div className="bg-white border border-gray-100 dark:bg-[#1A1D27] dark:border-gray-800
-                        p-3 md:p-6 rounded-2xl md:rounded-3xl shadow-sm">
-          <div className="flex items-center justify-between 
-                          mb-2 md:mb-3 text-gray-400 dark:text-gray-500">
-            <span className="text-[10px] md:text-xs font-bold 
-                             uppercase tracking-wider leading-tight">
+        <div className="bg-white border border-gray-100 dark:bg-[#1A1D27] dark:border-gray-800 p-4 sm:p-5 md:p-6 rounded-2xl md:rounded-3xl shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2 md:mb-3 text-gray-400 dark:text-gray-500">
+            <span className="text-[10px] md:text-xs font-bold uppercase tracking-wider leading-tight">
               {t.outstandingLoansLabel}
             </span>
             <Image src="/Bachat Gat icons/Dashboard/Outstanding Loans.svg" alt="Outstanding Loans" width={24} height={24} />
           </div>
-          <p className="text-lg md:text-2xl font-black text-[#1B2B6B] dark:text-white
-                        leading-tight break-all">
-            {formatRupees(totalOutstanding)}
-          </p>
-          <span className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 block">
-            {activeLoans.length} {t.activeCountText}
-          </span>
+          <div>
+            <p className="text-base sm:text-xl md:text-2xl font-black text-[#1B2B6B] dark:text-white leading-tight break-all">
+              {formatRupees(totalOutstanding)}
+            </p>
+            <span className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 block">
+              {activeLoans.length} {t.activeCountText}
+            </span>
+          </div>
         </div>
 
         {/* Card 4 — Pending Requests */}

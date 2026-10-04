@@ -275,10 +275,10 @@ export default function SettingsClient({
   }
 
   return (
-    <div className="p-8 max-w-4xl mx-auto space-y-8 pb-24">
+    <div className="px-4 py-5 sm:px-6 sm:py-8 max-w-5xl mx-auto space-y-6 sm:space-y-8 pb-24 animate-fadeIn">
       <div>
-        <h1 className="text-2xl font-bold text-[#1B2B6B] dark:text-white">{t.title}</h1>
-        <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">{t.sub}</p>
+        <h1 className="text-2xl sm:text-3xl font-bold text-[#1B2B6B] dark:text-white">{t.title}</h1>
+        <p className="text-gray-500 dark:text-gray-400 text-xs sm:text-sm mt-1">{t.sub}</p>
       </div>
 
       {message && (

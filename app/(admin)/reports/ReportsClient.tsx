@@ -261,10 +261,10 @@ export default function ReportsClient({
   }
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-[#1B2B6B] dark:text-white">{t.reportsTitle}</h1>
-        <button onClick={handlePrint} className="print:hidden bg-[#E85D26] text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-[#D04E1A] shadow-sm transition">
+    <div className="px-4 py-5 sm:px-6 sm:py-8 max-w-7xl mx-auto space-y-6 sm:space-y-8 animate-fadeIn">
+      <div className="flex justify-between items-center mb-2">
+        <h1 className="text-2xl sm:text-3xl font-bold text-[#1B2B6B] dark:text-white">{t.reportsTitle}</h1>
+        <button onClick={handlePrint} className="print:hidden bg-[#E85D26] text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold hover:bg-[#D04E1A] shadow-sm transition active:scale-95">
           {t.printReport}
         </button>
       </div>

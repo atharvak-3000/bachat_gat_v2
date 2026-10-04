@@ -203,35 +203,36 @@ export default function LoansClient({
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8 animate-fadeIn">
+    <div className="px-4 py-5 sm:px-6 sm:py-8 max-w-7xl mx-auto space-y-6 sm:space-y-8 animate-fadeIn">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-[#1B2B6B] dark:text-white">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#1B2B6B] dark:text-white">
           {t.title}
         </h1>
-        <p className="text-gray-500 dark:text-gray-400 mt-2 text-sm">
+        <p className="text-gray-500 dark:text-gray-400 mt-1 sm:mt-2 text-xs sm:text-sm">
           {t.sub}
         </p>
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="bg-white border border-gray-100 dark:bg-[#1A1D27] dark:border-gray-800 p-4 md:p-6 rounded-3xl shadow-sm">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+        <div className="bg-white border border-gray-100 dark:bg-[#1A1D27] dark:border-gray-800 p-4 sm:p-5 md:p-6 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between">
           <span className="text-[10px] md:text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider leading-tight block">{t.activeLoans}</span>
-          <h4 className="text-lg md:text-2xl font-black text-[#2E4099] dark:text-blue-400 mt-1.5 md:mt-2">{activeLoans.length}</h4>
+          <h4 className="text-lg sm:text-xl md:text-2xl font-black text-[#2E4099] dark:text-blue-400 mt-1.5 md:mt-2">{activeLoans.length}</h4>
         </div>
-        <div className="bg-white border border-gray-100 dark:bg-[#1A1D27] dark:border-gray-800 p-4 md:p-6 rounded-3xl shadow-sm">
+        <div className="bg-white border border-gray-100 dark:bg-[#1A1D27] dark:border-gray-800 p-4 sm:p-5 md:p-6 rounded-2xl sm:rounded-3xl shadow-sm flex flex-col justify-between">
           <span className="text-[10px] md:text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider leading-tight block">{t.pendingApprovals}</span>
-          <h4 className="text-lg md:text-2xl font-black text-[#E85D26] dark:text-orange-400 mt-1.5 md:mt-2">{pendingLoans.length}</h4>
+          <h4 className="text-lg sm:text-xl md:text-2xl font-black text-[#E85D26] dark:text-orange-400 mt-1.5 md:mt-2">{pendingLoans.length}</h4>
         </div>
-        <div className="bg-[#1B2B6B] border border-[#1B2B6B] dark:bg-[#0D1021] dark:border-blue-900/30 p-4 md:p-6 rounded-3xl shadow-md text-white">
+        <div className="col-span-2 sm:col-span-1 bg-[#1B2B6B] border border-[#1B2B6B] dark:bg-[#0D1021] dark:border-blue-900/30 p-4 sm:p-5 md:p-6 rounded-2xl sm:rounded-3xl shadow-md text-white flex flex-col justify-between">
           <span className="text-[10px] md:text-xs font-bold text-white/70 dark:text-white/60 uppercase tracking-wider leading-tight block">{t.totalOutstanding}</span>
-          <h4 className="text-lg md:text-2xl font-black text-white mt-1.5 md:mt-2 break-all">{formatRupees(totalOutstanding)}</h4>
+          <h4 className="text-base sm:text-xl md:text-2xl font-black text-white mt-1.5 md:mt-2 break-all">{formatRupees(totalOutstanding)}</h4>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200 dark:border-gray-800 gap-4 text-sm font-semibold overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0 scrollbar-none">
+
         {[
           { id: "all", label: `${t.tabAll} (${loans.length})` },
           { id: "pending", label: `${t.tabPending} (${pendingLoans.length})` },
