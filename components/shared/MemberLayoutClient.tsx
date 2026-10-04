@@ -46,38 +46,11 @@ export default function MemberLayoutClient({
       )
     },
     {
-      href: "/member/loans",
-      label: t("loans"),
-      icon: (
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      )
-    },
-    {
       href: "/member/passbook",
       label: t("passbook"),
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-        </svg>
-      )
-    },
-    {
-      href: "/member/kyc",
-      label: t("kyc"),
-      icon: (
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-        </svg>
-      )
-    },
-    {
-      href: "/member/payments",
-      label: t("payments"),
-      icon: (
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
         </svg>
       )
     },
@@ -91,48 +64,70 @@ export default function MemberLayoutClient({
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F6FA] dark:bg-[#0F1117] pb-16 md:pb-0 transition-colors duration-150">
-      {/* Desktop Header */}
-      <header className="bg-[#1B2B6B] dark:bg-[#0D1021] h-14 flex items-center px-6 justify-between sticky top-0 z-50 transition-colors duration-150">
-        <div className="mx-auto flex w-full max-w-4xl items-center justify-between">
-          <div className="flex items-center gap-6 text-sm font-medium flex-1">
-            <span className="font-bold text-white text-lg pr-4 border-r border-white/20 mr-2">BachatGatOnline</span>
-            <div className="hidden md:flex items-center gap-6">
+    <div className="min-h-screen bg-[#F5F6FA] dark:bg-[#0F1117] pb-20 md:pb-8 transition-colors duration-150">
+      {/* Header */}
+      <header className="bg-[#1B2B6B] dark:bg-[#0D1021] sticky top-0 z-50 border-b border-white/10 transition-colors duration-150 shadow-md">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 sm:px-6 h-16">
+          {/* Logo & Desktop Navigation */}
+          <div className="flex items-center gap-6">
+            <Link href="/member" className="flex items-center gap-2 group">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#E85D26] to-amber-400 flex items-center justify-center text-white font-black text-sm shadow">
+                BG
+              </div>
+              <span className="font-bold text-white text-base sm:text-lg tracking-tight">
+                BachatGat<span className="text-[#E85D26]">Online</span>
+              </span>
+            </Link>
+
+            <nav className="hidden sm:flex items-center gap-2 ml-4">
               {navItems.map((item) => {
                 const active = isLinkActive(item)
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`transition-colors text-sm px-3 py-1.5 rounded-lg transition ${
-                      active ? 'text-white font-semibold bg-white/15 border-b-2 border-[#E85D26]' : 'text-blue-200 hover:text-white hover:bg-white/10 dark:text-blue-300'
+                    className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs md:text-sm font-semibold transition-all ${
+                      active
+                        ? "text-white bg-white/20 border-b-2 border-[#E85D26] shadow-sm"
+                        : "text-blue-100 hover:text-white hover:bg-white/10"
                     }`}
                   >
-                    {item.label}
+                    {item.icon}
+                    <span>{item.label}</span>
                   </Link>
                 )
               })}
-            </div>
+            </nav>
           </div>
-          <div className="flex items-center gap-4">
+
+          {/* Controls & Sign Out */}
+          <div className="flex items-center gap-2 sm:gap-3">
             <DarkModeToggle />
+
             <button
               onClick={toggleLanguage}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/20 text-white bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-xs"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full border border-white/20 text-white bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-xs font-bold"
               title="Switch Language / भाषा बदलें"
             >
               <span>🌐</span>
-              <span className="font-extrabold">{lang === "en" ? "मराठी" : "English"}</span>
+              <span className="hidden xs:inline">{lang === "en" ? "मराठी" : "English"}</span>
             </button>
-            <div className="text-white hover:text-blue-200">
+
+            <div className="text-white hover:text-blue-200 flex items-center justify-center p-1">
               <NotificationBell />
             </div>
-            <form action="/auth/signout" method="post">
+
+            {/* Sign Out Button */}
+            <form action="/auth/signout" method="post" className="flex items-center">
               <button
                 type="submit"
-                className="border border-white/30 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-white/10 transition font-semibold"
+                className="flex items-center gap-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-200 hover:text-white border border-red-400/30 text-xs sm:text-sm px-3 py-1.5 rounded-lg transition font-medium active:scale-95"
+                title={t("signOut")}
               >
-                Sign Out
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span className="hidden sm:inline font-semibold">{t("signOut")}</span>
               </button>
             </form>
           </div>
@@ -140,29 +135,39 @@ export default function MemberLayoutClient({
       </header>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 py-8">{children}</main>
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">{children}</main>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#1B2B6B] dark:bg-[#0D1021] border-t border-white/10 dark:border-white/5 z-30 flex justify-around py-2 transition-colors duration-150">
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-[#1B2B6B] dark:bg-[#0D1021] border-t border-white/10 z-40 flex items-center justify-around py-2 px-4 shadow-lg">
         {navItems.map((item) => {
           const active = isLinkActive(item)
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center gap-0.5 flex-1 py-1 px-2 ${
-                active ? 'text-white font-semibold' : 'text-blue-200 hover:text-white dark:text-blue-300'
+              className={`flex flex-col items-center gap-1 py-1 px-4 rounded-xl transition-all ${
+                active ? "text-white font-bold bg-white/15" : "text-blue-200 hover:text-white"
               }`}
             >
-              <div className={`${active ? 'text-white' : 'text-blue-300'}`}>
-                {item.icon}
-              </div>
-              <span className="text-[10px] font-medium tracking-tight truncate max-w-[64px]">
-                {item.label}
-              </span>
+              {item.icon}
+              <span className="text-[11px] leading-none">{item.label}</span>
             </Link>
           )
         })}
+
+        {/* Mobile Sign Out */}
+        <form action="/auth/signout" method="post" className="flex items-center">
+          <button
+            type="submit"
+            className="flex flex-col items-center gap-1 py-1 px-4 text-red-300 hover:text-red-100 transition-all"
+            title={t("signOut")}
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            <span className="text-[11px] leading-none font-medium">{t("signOut")}</span>
+          </button>
+        </form>
       </nav>
     </div>
   )

@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation"
-import { requireAuth, toSafeMember } from "@/lib/auth"
+import { requireAuth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { calcMemberStats, formatRupees, formatMonthYear } from "@/lib/calculations"
-import type { MeetingContribution, Meeting, Loan, LoanEmi, Member } from "@/types"
+import type { MeetingContribution, Meeting, Loan } from "@/types"
 import { cookies } from "next/headers"
 import { getTranslation } from "@/lib/translations"
 
@@ -25,6 +25,7 @@ export default async function MemberPage() {
     }),
     prisma.loan.findMany({
       where: { memberId: performer.id },
+      orderBy: { createdAt: "desc" },
     }),
   ])
 
@@ -56,7 +57,7 @@ export default async function MemberPage() {
     loan_amount: Number(l.loanAmount),
     outstanding_amount: Number(l.outstandingAmount),
     interest_rate: Number(l.interestRate),
-    disbursed_date: l.disbursedDate.toISOString().split("T")[0],
+    disbursed_date: l.disbursedDate ? l.disbursedDate.toISOString().split("T")[0] : null,
     term_months: l.termMonths,
     created_at: l.createdAt.toISOString(),
   })) as unknown as Loan[]
@@ -74,41 +75,13 @@ export default async function MemberPage() {
   )
 
   const activeLoan = memberLoans.find((l: any) => l.status === "ACTIVE")
-  let nextEmi: LoanEmi | null = null
-  let overdueEmiCount = 0
-  let emiProgressPercent = 0
+  const pendingLoans = memberLoans.filter((l: any) => l.status === "PENDING")
+  const closedLoans = memberLoans.filter((l: any) => l.status === "CLOSED" || l.status === "REJECTED")
 
-  if (activeLoan) {
-    const emis = await prisma.loanEmi.findMany({
-      where: { loanId: activeLoan.id },
-      orderBy: { monthYear: "asc" },
-    })
-
-    const loanEmis = emis.map((e: any) => ({
-      ...e,
-      loan_id: e.loanId,
-      month_year: e.monthYear,
-      due_date: e.dueDate.toISOString().split("T")[0],
-      principal_due: Number(e.principalDue),
-      interest_due: Number(e.interestDue),
-      principal_paid: Number(e.principalPaid),
-      interest_paid: Number(e.interestPaid),
-      fine_amount: Number(e.fineAmount),
-      paid_at: e.paidAt ? e.paidAt.toISOString() : null,
-    })) as unknown as LoanEmi[]
-
-    const todayStr = new Date().toISOString().split("T")[0]
-
-    nextEmi = loanEmis.find((e: any) => e.status !== "PAID") || null
-
-    overdueEmiCount = loanEmis.filter(
-      (e: any) => e.status === "OVERDUE" || (e.status !== "PAID" && e.due_date < todayStr)
-    ).length
-
-    emiProgressPercent = Math.min(
-      100,
-      Math.round(((activeLoan.loan_amount - activeLoan.outstanding_amount) / activeLoan.loan_amount) * 100)
-    )
+  let loanProgressPercent = 0
+  if (activeLoan && activeLoan.loan_amount > 0) {
+    const repaid = activeLoan.loan_amount - activeLoan.outstanding_amount
+    loanProgressPercent = Math.min(100, Math.max(0, Math.round((repaid / activeLoan.loan_amount) * 100)))
   }
 
   const orgMembers = await prisma.member.findMany({
@@ -148,32 +121,44 @@ export default async function MemberPage() {
     .slice(0, 12)
 
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="space-y-6 sm:space-y-8 animate-fadeIn">
       {/* Welcome Card */}
-      <div className="bg-gradient-to-br from-[#1B2B6B] to-[#2E4099] rounded-2xl p-6 text-white shadow-lg space-y-6">
-        <div>
-          <span className="text-blue-200 text-xs font-semibold uppercase tracking-wider">{t("welcome")}</span>
-          <h1 className="text-3xl font-bold mt-1">{performer.name} 👋</h1>
-          <p className="text-blue-200 text-sm mt-1">{performer.organization.name}</p>
+      <div className="bg-gradient-to-br from-[#1B2B6B] via-[#243782] to-[#2E4099] rounded-2xl p-6 sm:p-8 text-white shadow-xl space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <span className="text-blue-200 text-xs font-semibold uppercase tracking-wider">{t("welcome")}</span>
+            <h1 className="text-2xl sm:text-3xl font-extrabold mt-0.5 tracking-tight">{performer.name} 👋</h1>
+            <p className="text-blue-200 text-xs sm:text-sm mt-1">{performer.organization.name}</p>
+          </div>
+          <div className="inline-flex items-center gap-2 self-start sm:self-auto bg-white/10 backdrop-blur-md border border-white/20 px-3.5 py-1.5 rounded-full text-xs font-semibold">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>{t("memberName")}</span>
+          </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 md:gap-4">
-          <div className="bg-white/10 border border-white/20 rounded-xl p-3 md:p-4 text-center">
-            <p className="text-blue-200 text-xs uppercase tracking-wide">{t("memberNo")}</p>
-            <p className="text-white font-bold text-xl mt-1">#{performer.member_number}</p>
+        <div className="grid grid-cols-3 gap-2.5 sm:gap-4 pt-2 border-t border-white/10">
+          <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-3 sm:p-4 text-center">
+            <p className="text-blue-200 text-[10px] sm:text-xs font-medium uppercase tracking-wider">{t("memberNo")}</p>
+            <p className="text-white font-black text-lg sm:text-2xl mt-0.5">#{performer.member_number}</p>
           </div>
-          <div className="bg-white/10 border border-white/20 rounded-xl p-3 md:p-4 text-center">
-            <p className="text-blue-200 text-xs uppercase tracking-wide">{t("groupCode")}</p>
-            <p className="text-white font-bold text-xl mt-1 font-mono">{performer.organization.group_code}</p>
+          <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-3 sm:p-4 text-center">
+            <p className="text-blue-200 text-[10px] sm:text-xs font-medium uppercase tracking-wider">{t("groupCode")}</p>
+            <p className="text-white font-black text-lg sm:text-2xl mt-0.5 font-mono">{performer.organization.group_code}</p>
           </div>
-          <div className="bg-white/10 border border-white/20 rounded-xl p-3 md:p-4 text-center flex flex-col justify-center items-center">
-            <p className="text-blue-200 text-xs uppercase tracking-wide mb-1">{t("kyc")}</p>
+          <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-3 sm:p-4 text-center flex flex-col justify-center items-center">
+            <p className="text-blue-200 text-[10px] sm:text-xs font-medium uppercase tracking-wider mb-1">{t("kyc")}</p>
             {performer.kyc_status === "VERIFIED" ? (
-              <span className="text-green-300 font-semibold">{t("verified")}</span>
+              <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-2.5 py-0.5 rounded-full text-xs font-bold">
+                ✓ {t("verified")}
+              </span>
             ) : performer.kyc_status === "REJECTED" ? (
-              <span className="text-red-300 font-semibold">{t("rejected")}</span>
+              <span className="bg-red-500/20 text-red-300 border border-red-400/30 px-2.5 py-0.5 rounded-full text-xs font-bold">
+                ✗ {t("rejected")}
+              </span>
             ) : (
-              <span className="text-[#E85D26] font-semibold">{t("pending")}</span>
+              <span className="bg-amber-500/20 text-amber-300 border border-amber-400/30 px-2.5 py-0.5 rounded-full text-xs font-bold">
+                ⏳ {t("pending")}
+              </span>
             )}
           </div>
         </div>
@@ -181,164 +166,268 @@ export default async function MemberPage() {
 
       {/* KYC Warning/Status Card */}
       {performer.kyc_status !== "VERIFIED" && (
-        <div className="bg-orange-50 dark:bg-orange-950/20 border-l-4 border-[#E85D26] rounded-xl p-4 flex items-start gap-3">
-          <span className="text-xl text-[#E85D26]">⚠️</span>
-          <div>
-            <p className="text-[#1B2B6B] dark:text-white font-semibold">
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 border-l-4 border-[#E85D26] rounded-2xl p-5 shadow-sm flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-[#E85D26]/10 text-[#E85D26] flex items-center justify-center shrink-0 text-xl font-bold">
+            ℹ️
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-[#1B2B6B] dark:text-white font-bold text-sm sm:text-base">
               {performer.kyc_status === "REJECTED" ? t("kycNotApproved") : t("completeKyc")}
-            </p>
-            <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">
+            </h3>
+            <p className="text-gray-600 dark:text-gray-300 text-xs sm:text-sm leading-relaxed">
               {performer.kyc_status === "REJECTED" ? t("kycNotApprovedDesc") : t("completeKycDesc")}
             </p>
           </div>
         </div>
       )}
 
-      {/* Personal Stats Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm p-5">
-          <span className="text-gray-400 dark:text-gray-500 text-xs font-semibold uppercase tracking-wide block">
-            {t("mySavings")}
-          </span>
-          <h4 className="text-2xl font-bold text-[#1B2B6B] dark:text-white mt-1.5 md:mt-2 break-all">{formatRupees(stats.total_savings)}</h4>
+      {/* Personal Stats Grid: Fully responsive for Mobile, Tablet (2x2), and Desktop (4-col) */}
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        {/* Total Savings */}
+        <div className="bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm hover:shadow-md transition p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-400 dark:text-gray-400 text-xs font-bold uppercase tracking-wider">
+              {t("mySavings")}
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-sm font-bold">
+              💰
+            </div>
+          </div>
+          <div className="mt-3">
+            <h4 className="text-xl sm:text-2xl font-extrabold text-[#1B2B6B] dark:text-white break-all">
+              {formatRupees(stats.total_savings)}
+            </h4>
+            <span className="text-emerald-600 dark:text-emerald-400 text-[11px] font-semibold mt-1 block">
+              ✓ {t("verified")}
+            </span>
+          </div>
         </div>
-        <div className="bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm p-5">
-          <span className="text-gray-400 dark:text-gray-500 text-xs font-semibold uppercase tracking-wide block">
-            {t("activeLoanDue")}
-          </span>
-          <h4 className="text-2xl font-bold text-[#E85D26] dark:text-orange-400 mt-1.5 md:mt-2 break-all">{formatRupees(stats.outstanding_loan)}</h4>
+
+        {/* Active Loan Due */}
+        <div className="bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm hover:shadow-md transition p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-400 dark:text-gray-400 text-xs font-bold uppercase tracking-wider">
+              {t("activeLoanDue")}
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-orange-50 dark:bg-orange-950/40 text-[#E85D26] flex items-center justify-center text-sm font-bold">
+              🏦
+            </div>
+          </div>
+          <div className="mt-3">
+            <h4 className="text-xl sm:text-2xl font-extrabold text-[#E85D26] dark:text-orange-400 break-all">
+              {formatRupees(stats.outstanding_loan)}
+            </h4>
+            <span className="text-gray-400 dark:text-gray-500 text-[11px] font-medium mt-1 block">
+              {activeLoan ? `${activeLoan.interest_rate}% p.a.` : t("notSpecified")}
+            </span>
+          </div>
         </div>
-        <div className="bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm p-5">
-          <span className="text-gray-400 dark:text-gray-500 text-xs font-semibold uppercase tracking-wide block">
-            {t("interestPaid")}
-          </span>
-          <h4 className="text-2xl font-bold text-[#E85D26] dark:text-orange-400 mt-1.5 md:mt-2 break-all">{formatRupees(stats.total_interest_paid)}</h4>
+
+        {/* Interest Paid */}
+        <div className="bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm hover:shadow-md transition p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-400 dark:text-gray-400 text-xs font-bold uppercase tracking-wider">
+              {t("interestPaid")}
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center text-sm font-bold">
+              📈
+            </div>
+          </div>
+          <div className="mt-3">
+            <h4 className="text-xl sm:text-2xl font-extrabold text-[#1B2B6B] dark:text-white break-all">
+              {formatRupees(stats.total_interest_paid)}
+            </h4>
+            <span className="text-gray-400 dark:text-gray-500 text-[11px] font-medium mt-1 block">
+              {t("paid")}
+            </span>
+          </div>
         </div>
-        <div className="bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm p-5">
-          <span className="text-gray-400 dark:text-gray-500 text-xs font-semibold uppercase tracking-wide block">
-            {t("attendance")}
-          </span>
-          <h4 className="text-2xl font-bold text-[#2E4099] dark:text-blue-400 mt-1.5 md:mt-2">{stats.attendance_percent}%</h4>
-          <span className="text-gray-400 dark:text-gray-500 text-xs mt-0.5 block">{stats.meetings_attended} / {stats.total_meetings} {t("meetings")}</span>
+
+        {/* Attendance */}
+        <div className="bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm hover:shadow-md transition p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-400 dark:text-gray-400 text-xs font-bold uppercase tracking-wider">
+              {t("attendance")}
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center text-sm font-bold">
+              📅
+            </div>
+          </div>
+          <div className="mt-3">
+            <h4 className="text-xl sm:text-2xl font-extrabold text-[#2E4099] dark:text-blue-400">
+              {stats.attendance_percent}%
+            </h4>
+            <span className="text-gray-400 dark:text-gray-500 text-[11px] font-medium mt-1 block">
+              {stats.meetings_attended} / {stats.total_meetings} {t("meetings")}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Active Loan & EMI Details */}
+      {/* Active Loan Details Card */}
       {activeLoan && (
         <div className="bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-2xl p-6 shadow-sm space-y-6">
-          <div className="border-b border-gray-100 dark:border-gray-800 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="border-b border-gray-100 dark:border-gray-800 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold text-[#1B2B6B] dark:text-white">{t("activeLoanRepayment")}</h2>
-              <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">{t("disbursedOn")} {new Date(activeLoan.disbursed_date).toLocaleDateString("en-IN")}</p>
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <h2 className="text-lg font-bold text-[#1B2B6B] dark:text-white">{t("activeLoanTitle")}</h2>
+              </div>
+              {activeLoan.disbursed_date && (
+                <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
+                  {t("disbursedOn")}: {new Date(activeLoan.disbursed_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                </p>
+              )}
             </div>
-            {overdueEmiCount > 0 && (
-              <span className="inline-flex px-3 py-1 rounded-full text-xs font-bold bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900/30 animate-pulse">
-                ⚠️ {overdueEmiCount} {t("overdueEmi")}
-              </span>
-            )}
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 self-start sm:self-auto">
+              ✓ {t("verified")}
+            </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="md:col-span-2 space-y-4">
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs font-bold text-gray-500 dark:text-gray-400">
-                  <span>{t("repaymentProgress")}</span>
-                  <span className="text-[#E85D26] dark:text-orange-400">{emiProgressPercent}% {t("paid")}</span>
-                </div>
-                <div className="w-full h-3.5 bg-gray-100 dark:bg-gray-950 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-[#1B2B6B] dark:bg-blue-600 rounded-full transition-all duration-300"
-                    style={{ width: `${emiProgressPercent}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-[11px] text-gray-400 dark:text-gray-500 font-semibold">
-                  <span>{t("repaid")}: {formatRupees(activeLoan.loan_amount - activeLoan.outstanding_amount)}</span>
-                  <span>{t("remainingOutstanding")}: {formatRupees(activeLoan.outstanding_amount)}</span>
-                </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Repayment Progress */}
+            <div className="space-y-4">
+              <div className="flex justify-between text-xs font-bold">
+                <span className="text-gray-500 dark:text-gray-400">{t("repaymentProgress")}</span>
+                <span className="text-[#E85D26] dark:text-orange-400 font-extrabold">{loanProgressPercent}% {t("paid")}</span>
               </div>
-
-              <div className="grid grid-cols-2 gap-4 text-xs bg-gray-50/50 dark:bg-gray-950/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
-                <div>
-                  <span className="text-gray-400 dark:text-gray-500">{t("totalSanctionedLoan")}</span>
-                  <p className="text-sm font-bold text-gray-800 dark:text-white mt-0.5">{formatRupees(activeLoan.loan_amount)}</p>
-                </div>
-                <div>
-                  <span className="text-gray-400 dark:text-gray-500">{t("monthlyInterestRate")}</span>
-                  <p className="text-sm font-bold text-gray-800 dark:text-white mt-0.5">{activeLoan.interest_rate}% p.a.</p>
-                </div>
+              <div className="w-full h-4 bg-gray-100 dark:bg-gray-900 rounded-full overflow-hidden p-0.5 border border-gray-200 dark:border-gray-800">
+                <div
+                  className="h-full bg-gradient-to-r from-[#1B2B6B] to-[#2E4099] dark:from-blue-600 dark:to-indigo-500 rounded-full transition-all duration-500"
+                  style={{ width: `${loanProgressPercent}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 font-semibold pt-1">
+                <span>{t("repaid")}: <strong className="text-gray-800 dark:text-white">{formatRupees(activeLoan.loan_amount - activeLoan.outstanding_amount)}</strong></span>
+                <span>{t("remainingOutstanding")}: <strong className="text-[#E85D26] dark:text-orange-400">{formatRupees(activeLoan.outstanding_amount)}</strong></span>
               </div>
             </div>
 
-            {nextEmi && (
-              <div className="bg-[#E85D26]/5 dark:bg-[#E85D26]/5 border border-[#E85D26]/20 dark:border-orange-950/30 p-5 rounded-2xl space-y-4">
-                <span className="text-[10px] font-bold text-[#E85D26] dark:text-orange-400 uppercase tracking-wider">{t("nextEmiDue")}</span>
-
-                <div className="space-y-2 text-xs font-medium text-gray-600 dark:text-gray-300">
-                  <div className="flex justify-between">
-                    <span>{t("month")}</span>
-                    <strong className="text-gray-900 dark:text-white">{nextEmi.month_year}</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>{t("principal")}</span>
-                    <strong className="text-gray-800 dark:text-white">{formatRupees(nextEmi.principal_due - nextEmi.principal_paid)}</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>{t("interest")}</span>
-                    <strong className="text-gray-800 dark:text-white">{formatRupees(nextEmi.interest_due - nextEmi.interest_paid)}</strong>
-                  </div>
-
-                  <hr className="border-[#E85D26]/20 dark:border-orange-950/20" />
-
-                  <div className="flex justify-between text-sm font-extrabold text-[#E85D26] dark:text-orange-400">
-                    <span>{t("totalDue")}</span>
-                    <span>{formatRupees((nextEmi.principal_due - nextEmi.principal_paid) + (nextEmi.interest_due - nextEmi.interest_paid))}</span>
-                  </div>
-                </div>
-
-                <div className="text-[10px] text-gray-400 dark:text-gray-500 font-medium text-center">
-                  {t("dueOn")}: {new Date(nextEmi.due_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
-                </div>
+            {/* Loan Specs */}
+            <div className="grid grid-cols-2 gap-4 text-xs bg-gray-50/70 dark:bg-gray-950/50 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
+              <div>
+                <span className="text-gray-400 dark:text-gray-500 block font-medium">{t("totalSanctionedLoan")}</span>
+                <p className="text-base font-extrabold text-gray-900 dark:text-white mt-1">{formatRupees(activeLoan.loan_amount)}</p>
               </div>
-            )}
+              <div>
+                <span className="text-gray-400 dark:text-gray-500 block font-medium">{t("monthlyInterestRate")}</span>
+                <p className="text-base font-extrabold text-gray-900 dark:text-white mt-1">{activeLoan.interest_rate}% p.a.</p>
+              </div>
+              <div>
+                <span className="text-gray-400 dark:text-gray-500 block font-medium">{t("term")}</span>
+                <p className="text-sm font-bold text-gray-800 dark:text-gray-200 mt-1">{activeLoan.term_months} {t("months")}</p>
+              </div>
+              {activeLoan.purpose && (
+                <div>
+                  <span className="text-gray-400 dark:text-gray-500 block font-medium">{t("purpose")}</span>
+                  <p className="text-sm font-bold text-gray-800 dark:text-gray-200 mt-1 truncate">{activeLoan.purpose}</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* Grid: Contributions History & Transparency */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-2xl p-6 shadow-sm space-y-4">
-          <h2 className="text-lg font-bold text-[#1B2B6B] dark:text-white border-b border-gray-50 dark:border-gray-800 pb-3">{t("mySavingsHistory")}</h2>
+      {/* Pending Loan Requests (if any) */}
+      {pendingLoans.length > 0 && (
+        <div className="bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-2xl p-5 shadow-sm space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">⏳</span>
+            <h3 className="font-bold text-amber-900 dark:text-amber-200 text-sm sm:text-base">{t("pendingApproval")}</h3>
+          </div>
+          {pendingLoans.map((loan) => (
+            <div key={loan.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white/80 dark:bg-gray-900/60 p-3.5 rounded-xl text-xs">
+              <div>
+                <span className="font-extrabold text-gray-900 dark:text-white text-sm">{formatRupees(loan.loan_amount)}</span>
+                <span className="text-gray-500 dark:text-gray-400 ml-2">({loan.term_months} {t("months")})</span>
+              </div>
+              <span className="text-amber-700 dark:text-amber-400 font-semibold">{t("awaitingSuperAdmin")}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Past Closed / Rejected Loans (if any) */}
+      {closedLoans.length > 0 && (
+        <div className="bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-2xl p-6 shadow-sm space-y-4">
+          <h3 className="font-bold text-[#1B2B6B] dark:text-white text-base border-b border-gray-100 dark:border-gray-800 pb-3">
+            📜 {t("loanHistory")}
+          </h3>
+          <div className="divide-y divide-gray-100 dark:divide-gray-800">
+            {closedLoans.map((loan) => (
+              <div key={loan.id} className="py-3 first:pt-0 last:pb-0 flex items-center justify-between text-xs">
+                <div>
+                  <p className="font-bold text-gray-800 dark:text-gray-200">{formatRupees(loan.loan_amount)}</p>
+                  <p className="text-gray-400 dark:text-gray-500 text-[11px]">
+                    {loan.disbursed_date ? `${t("disbursedOn")}: ${loan.disbursed_date}` : t("notSpecified")}
+                  </p>
+                </div>
+                <span className={`px-2.5 py-1 rounded-full font-bold text-[11px] ${
+                  loan.status === "CLOSED"
+                    ? "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                    : "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400"
+                }`}>
+                  {loan.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Responsive Section Grid: My Savings History + Gat Transparency */}
+      <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+        {/* Savings History Table (2 Columns on Large Screens, full width on Mobile/Tablet) */}
+        <div className="lg:col-span-2 bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
+            <h2 className="text-base sm:text-lg font-bold text-[#1B2B6B] dark:text-white">
+              💳 {t("mySavingsHistory")}
+            </h2>
+            <span className="text-xs text-gray-400 font-medium">{sortedContributions.length} {t("meetings")}</span>
+          </div>
 
           {sortedContributions.length === 0 ? (
-            <p className="text-gray-400 dark:text-gray-500 text-xs italic py-6 text-center">{t("noContributions")}</p>
+            <p className="text-gray-400 dark:text-gray-500 text-xs italic py-8 text-center">{t("noContributions")}</p>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-gray-100 dark:border-gray-800">
-              <table className="w-full text-left text-xs border-collapse">
+            <div className="overflow-x-auto -mx-2 sm:mx-0 rounded-xl border border-gray-100 dark:border-gray-800">
+              <table className="w-full text-left text-xs border-collapse min-w-[500px]">
                 <thead>
-                  <tr className="bg-[#1B2B6B] dark:bg-gray-950 text-white text-xs font-semibold uppercase tracking-wide">
-                    <th className="px-3 py-3">{t("month")}</th>
-                    <th className="px-3 py-3 text-center">{t("present")}</th>
-                    <th className="px-3 py-3">{t("savings")}</th>
-                    <th className="px-3 py-3">{t("repaid")}</th>
-                    <th className="px-3 py-3">{t("interest")}</th>
-                    <th className="px-3 py-3">{t("penalty")}</th>
+                  <tr className="bg-[#1B2B6B] dark:bg-gray-950 text-white text-xs font-semibold uppercase tracking-wider">
+                    <th className="px-3.5 py-3">{t("month")}</th>
+                    <th className="px-3.5 py-3 text-center">{t("attendance")}</th>
+                    <th className="px-3.5 py-3">{t("savings")}</th>
+                    <th className="px-3.5 py-3">{t("repaid")}</th>
+                    <th className="px-3.5 py-3">{t("interest")}</th>
+                    <th className="px-3.5 py-3">{t("penalty")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800 font-medium text-gray-700 dark:text-gray-300">
                   {sortedContributions.map((c) => (
-                    <tr key={c.id} className="odd:bg-white odd:dark:bg-[#1A1D27] even:bg-gray-50 even:dark:bg-gray-950/30 hover:bg-blue-50/40 dark:hover:bg-blue-950/10 transition-colors border-b border-gray-100 dark:border-gray-800">
-                      <td className="px-3 py-3 font-bold text-gray-900 dark:text-white">{formatMonthYear(c.meeting.month_year)}</td>
-                      <td className="px-3 py-3 text-center">
+                    <tr key={c.id} className="odd:bg-white odd:dark:bg-[#1A1D27] even:bg-gray-50/60 even:dark:bg-gray-950/30 hover:bg-blue-50/40 dark:hover:bg-blue-950/20 transition-colors">
+                      <td className="px-3.5 py-3 font-bold text-gray-900 dark:text-white whitespace-nowrap">
+                        {formatMonthYear(c.meeting.month_year)}
+                      </td>
+                      <td className="px-3.5 py-3 text-center whitespace-nowrap">
                         {c.is_present ? (
-                          <span className="text-green-600 dark:text-green-400 font-semibold">✓ {t("present")}</span>
+                          <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 font-bold text-[11px]">
+                            ✓ {t("present")}
+                          </span>
                         ) : (
-                          <span className="text-red-500 dark:text-red-400 font-semibold">✗ {t("absent")}</span>
+                          <span className="inline-block px-2 py-0.5 rounded-md bg-red-50 dark:bg-red-950/40 text-red-500 dark:text-red-400 font-bold text-[11px]">
+                            ✗ {t("absent")}
+                          </span>
                         )}
                       </td>
-                      <td className="px-3 py-3">{formatRupees(c.savings_amount)}</td>
-                      <td className="px-3 py-3">{formatRupees(c.loan_repayment)}</td>
-                      <td className="px-3 py-3 text-[#E85D26] dark:text-orange-400">{formatRupees(c.interest_paid)}</td>
-                      <td className="px-3 py-3 text-red-500 dark:text-red-400 font-semibold">{formatRupees(c.penalty_paid)}</td>
+                      <td className="px-3.5 py-3 font-semibold text-gray-900 dark:text-white whitespace-nowrap">
+                        {formatRupees(c.savings_amount)}
+                      </td>
+                      <td className="px-3.5 py-3 whitespace-nowrap">{formatRupees(c.loan_repayment)}</td>
+                      <td className="px-3.5 py-3 text-[#E85D26] dark:text-orange-400 font-semibold whitespace-nowrap">
+                        {formatRupees(c.interest_paid)}
+                      </td>
+                      <td className="px-3.5 py-3 text-red-500 dark:text-red-400 font-semibold whitespace-nowrap">
+                        {formatRupees(c.penalty_paid)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -347,47 +436,38 @@ export default async function MemberPage() {
           )}
         </div>
 
-        <div className="lg:col-span-1 bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-2xl p-6 shadow-sm space-y-4">
-          <div className="border-b border-gray-50 dark:border-gray-800 pb-3">
-            <h2 className="text-lg font-bold text-[#1B2B6B] dark:text-white">📊 {t("gatTransparency")}</h2>
-            <p className="text-gray-400 dark:text-gray-500 text-[10px] mt-0.5">{t("transparencyDesc")}</p>
+        {/* Gat Transparency Section (1 Column on Desktop, full width or side-by-side on Tablet) */}
+        <div className="lg:col-span-1 bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+          <div className="border-b border-gray-100 dark:border-gray-800 pb-3">
+            <h2 className="text-base sm:text-lg font-bold text-[#1B2B6B] dark:text-white flex items-center gap-2">
+              <span>📊</span>
+              <span>{t("gatTransparency")}</span>
+            </h2>
+            <p className="text-gray-400 dark:text-gray-500 text-[11px] mt-1 leading-normal">
+              {t("transparencyDesc")}
+            </p>
           </div>
 
-          <div className="space-y-4">
-            <div className="flex justify-between items-center py-2.5 border-b border-gray-50 dark:border-gray-800 last:border-0">
+          <div className="space-y-3.5 pt-1">
+            <div className="flex justify-between items-center py-2.5 border-b border-gray-100 dark:border-gray-800/80">
               <span className="text-xs text-gray-500 dark:text-gray-400 font-semibold">{t("totalGroupSavings")}</span>
-              <strong className="text-sm font-bold text-gray-800 dark:text-white">{formatRupees(orgSavings)}</strong>
+              <strong className="text-sm font-extrabold text-gray-900 dark:text-white">{formatRupees(orgSavings)}</strong>
             </div>
-            <div className="flex justify-between items-center py-2.5 border-b border-gray-50 dark:border-gray-800 last:border-0">
+            <div className="flex justify-between items-center py-2.5 border-b border-gray-100 dark:border-gray-800/80">
               <span className="text-xs text-gray-500 dark:text-gray-400 font-semibold">{t("outstandingLoans")}</span>
-              <strong className="text-sm font-bold text-gray-800 dark:text-white">{formatRupees(orgLoansOut)}</strong>
+              <strong className="text-sm font-extrabold text-gray-900 dark:text-white">{formatRupees(orgLoansOut)}</strong>
             </div>
-            <div className="flex justify-between items-center py-2.5 border-b border-gray-50 dark:border-gray-800 last:border-0">
+            <div className="flex justify-between items-center py-2.5 border-b border-gray-100 dark:border-gray-800/80">
               <span className="text-xs text-gray-500 dark:text-gray-400 font-semibold">{t("interestCollected")}</span>
-              <strong className="text-sm font-bold text-[#E85D26] dark:text-orange-400">{formatRupees(orgInterest)}</strong>
+              <strong className="text-sm font-extrabold text-[#E85D26] dark:text-orange-400">{formatRupees(orgInterest)}</strong>
             </div>
-            <div className="flex justify-between items-center py-2.5 border-b border-gray-50 dark:border-gray-800 last:border-0">
+            <div className="flex justify-between items-center py-2.5">
               <span className="text-xs text-gray-500 dark:text-gray-400 font-semibold">{t("finesCollected")}</span>
-              <strong className="text-sm font-bold text-red-500 dark:text-red-400">{formatRupees(orgFines)}</strong>
+              <strong className="text-sm font-extrabold text-red-500 dark:text-red-400">{formatRupees(orgFines)}</strong>
             </div>
           </div>
         </div>
       </div>
-
-      <SignOutButton t={t} />
     </div>
-  )
-}
-
-function SignOutButton({ t }: { t: any }) {
-  return (
-    <form action="/auth/signout" method="post">
-      <button
-        type="submit"
-        className="w-full py-3.5 border border-red-200 dark:border-red-900/30 text-red-500 dark:text-red-400 rounded-2xl text-xs font-bold hover:bg-red-50 dark:hover:bg-red-950/20 active:scale-95 transition"
-      >
-        {t("signOut")}
-      </button>
-    </form>
   )
 }
