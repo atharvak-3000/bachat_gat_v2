@@ -771,68 +771,64 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      {/* Two Column Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Left Column (Main forms and tables) */}
-        <div className="lg:col-span-2 space-y-8">
-          
-          {/* Contributions Section */}
-          <div className="bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-3xl overflow-hidden shadow-sm">
-            <div className="p-6 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/40">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">{t.contributionsHeader}</h2>
-                  <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">{t.contributionsSub}</p>
-                </div>
-
-                {/* Member Search by Code or Name */}
-                <div className="relative w-full sm:w-72">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </div>
-                  <input
-                    type="text"
-                    value={memberSearchQuery}
-                    onChange={(e) => setMemberSearchQuery(e.target.value)}
-                    placeholder={lang === 'mr' ? "सदस्य कोड किंवा नावाने शोधा..." : "Search member by code or name..."}
-                    className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 transition shadow-sm"
-                  />
-                  {memberSearchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => setMemberSearchQuery("")}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
+      {/* 1. Full-Width Member Ledger (Contributions & Position) */}
+      <div className="w-full">
+        {/* Contributions Section */}
+        <div className="bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-3xl overflow-hidden shadow-sm">
+          <div className="p-6 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/40">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">{t.contributionsHeader}</h2>
+                <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">{t.contributionsSub}</p>
               </div>
 
-              {/* Status bar when search is active */}
-              {memberSearchQuery && (
-                <div className="mt-3 flex items-center justify-between bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900/50 rounded-xl px-3.5 py-2 text-xs text-orange-900 dark:text-orange-300">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm">🔍</span>
-                    <span>
-                      {lang === 'mr'
-                        ? `${filteredContributions.length} सदस्य दिसत आहेत (इतर सर्व सदस्य लपवले आहेत)`
-                        : `${filteredContributions.length} member(s) shown (all other members hidden)`}
-                    </span>
-                  </div>
+              {/* Member Search by Code or Name */}
+              <div className="relative w-full sm:w-72">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  value={memberSearchQuery}
+                  onChange={(e) => setMemberSearchQuery(e.target.value)}
+                  placeholder={lang === 'mr' ? "सदस्य कोड किंवा नावाने शोधा..." : "Search member by code or name..."}
+                  className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 transition shadow-sm"
+                />
+                {memberSearchQuery && (
                   <button
                     type="button"
                     onClick={() => setMemberSearchQuery("")}
-                    className="font-bold text-[#E85D26] dark:text-orange-400 hover:underline ml-2"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                   >
-                    {lang === 'mr' ? "सर्व सदस्य दाखवा" : "Show all members"}
+                    ✕
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
+
+            {/* Status bar when search is active */}
+            {memberSearchQuery && (
+              <div className="mt-3 flex items-center justify-between bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900/50 rounded-xl px-3.5 py-2 text-xs text-orange-900 dark:text-orange-300">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">🔍</span>
+                  <span>
+                    {lang === 'mr'
+                      ? `${filteredContributions.length} सदस्य दिसत आहेत (इतर सर्व सदस्य लपवले आहेत)`
+                      : `${filteredContributions.length} member(s) shown (all other members hidden)`}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMemberSearchQuery("")}
+                  className="font-bold text-[#E85D26] dark:text-orange-400 hover:underline ml-2"
+                >
+                  {lang === 'mr' ? "सर्व सदस्य दाखवा" : "Show all members"}
+                </button>
+              </div>
+            )}
+          </div>
             
             {/* MOBILE CONTRIBUTION CARDS */}
             <div className="md:hidden divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-[#1A1D27]">
@@ -1329,9 +1325,16 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
               </table>
             </div>
           </div>
+        </div>
 
-          {/* Loans Issued Section */}
-          <div className="bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-3xl p-6 shadow-sm space-y-6">
+        {/* 2. Operations & Meeting Summary Grid Below Ledger */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* Left Column (Main operations and records) */}
+          <div className="lg:col-span-2 space-y-8">
+
+            {/* Loans Issued Section */}
+            <div className="bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-3xl p-6 shadow-sm space-y-6">
             <div className="border-b border-gray-100 dark:border-gray-800 pb-4">
               <h2 className="text-lg font-bold text-gray-900 dark:text-white">{t.loansHeader}</h2>
               <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">{t.loansSub}</p>
