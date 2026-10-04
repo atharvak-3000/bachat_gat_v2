@@ -117,13 +117,17 @@ export default function MembersClient({ members, currentMember, inviteLink }: Pr
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {members.map((m) => {
+            {members.map((m, idx) => {
               const badge = roleBadge[m.role] ?? roleBadge.MEMBER
               const isSelf = m.id === currentMember.id
               const isLoading = loadingId === m.id
               return (
                 <tr key={m.id} className="hover:bg-[#2E4099]/5 transition">
-                  <td className="px-6 py-4 text-gray-400 font-mono text-xs">{m.member_number}</td>
+                  <td className="px-6 py-4">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-bold bg-orange-50 text-[#E85D26] border border-orange-200">
+                      #{m.member_number ?? m.memberNumber ?? (idx + 1)}
+                    </span>
+                  </td>
                   <td className="px-6 py-4">
                     <div>
                       <a href={`/members/${m.id}`} className="font-semibold text-[#1B2B6B] hover:text-[#E85D26] hover:underline transition">

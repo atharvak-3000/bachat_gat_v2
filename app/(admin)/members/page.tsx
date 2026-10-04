@@ -45,7 +45,7 @@ export default function MembersPage() {
       removeAdmin: "अध्यक्ष काढा",
       reject: "काढा",
       noMembers: "कोणतेही सदस्य आढळले नाहीत.",
-      tableNum: "#",
+      tableNum: "सदस्य कोड",
       tableName: "नाव",
       tablePhone: "फोन",
       tableRole: "भूमिका",
@@ -95,7 +95,7 @@ export default function MembersPage() {
       removeAdmin: "Remove Admin",
       reject: "Reject",
       noMembers: "No members found.",
-      tableNum: "#",
+      tableNum: "Member Code",
       tableName: "Name",
       tablePhone: "Phone",
       tableRole: "Role",
@@ -334,7 +334,7 @@ export default function MembersPage() {
 
       {/* MOBILE CARDS */}
       <div className="md:hidden space-y-3 mb-6">
-        {filteredMembers.map(m => {
+        {filteredMembers.map((m, idx) => {
           const isSelf = m.id === currentMember?.id
           const targetIsSuperAdmin = m.role === 'SUPERADMIN'
           const targetIsActive = !m.status || m.status === 'ACTIVE'
@@ -348,8 +348,8 @@ export default function MembersPage() {
               {/* Row 1: Number + Name + Role */}
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400 dark:text-gray-500 font-mono w-6">
-                    #{m.member_number}
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-bold bg-orange-50 text-[#E85D26] dark:bg-orange-950/40 dark:text-orange-400 border border-orange-200 dark:border-orange-900/50">
+                    #{m.member_number ?? m.memberNumber ?? (idx + 1)}
                   </span>
                   <span className="font-semibold text-gray-900 dark:text-white text-sm">
                     {m.name}
@@ -446,7 +446,7 @@ export default function MembersPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-            {filteredMembers.map(m => {
+            {filteredMembers.map((m, idx) => {
               const target = m
               const isSelf = target.id === currentMember?.id
               const targetIsSuperAdmin = target.role === 'SUPERADMIN'
@@ -455,13 +455,17 @@ export default function MembersPage() {
 
               return (
                 <tr key={target.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/40">
-                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{target.member_number}</td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-bold bg-orange-50 text-[#E85D26] dark:bg-orange-950/40 dark:text-orange-400 border border-orange-200 dark:border-orange-900/50">
+                      #{target.member_number ?? target.memberNumber ?? (idx + 1)}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{target.name}</td>
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{target.phone}</td>
                   <td className="px-4 py-3">{getRoleBadge(target.role)}</td>
                   <td className="px-4 py-3">{getStatusBadge(target.status)}</td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
-                    {target.joining_date ? new Date(target.joining_date).toLocaleDateString("en-IN") : "-"}
+                    {target.joining_date || target.joiningDate ? new Date(target.joining_date || target.joiningDate).toLocaleDateString("en-IN") : "-"}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex justify-end gap-1 flex-wrap items-center">

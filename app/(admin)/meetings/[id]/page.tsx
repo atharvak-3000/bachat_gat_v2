@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useRef, use } from "react"
+import { useEffect, useState, useRef, use, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { toast } from "sonner"
@@ -57,6 +57,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
   const [closingDate, setClosingDate] = useState(
     new Date().toISOString().split('T')[0]
   )
+  const [memberSearchQuery, setMemberSearchQuery] = useState("")
 
   // Cell-level saving indicators
   const [cellStatus, setCellStatus] = useState<Record<string, 'saving' | 'saved' | 'idle'>>({})
@@ -348,6 +349,29 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
 
   // Computed values
   const contributionsList = Object.values(contribs)
+
+  const filteredContributions = useMemo(() => {
+    if (!memberSearchQuery.trim()) return contributionsList
+    const query = memberSearchQuery.toLowerCase().trim()
+    const cleanNumQuery = query.replace(/^#/, "")
+
+    return contributionsList.filter((c: any, index: number) => {
+      const member = c.member
+      const name = (member?.name || "").toLowerCase()
+      const nameMarathi = (member?.name_marathi || member?.nameMarathi || "").toLowerCase()
+      const memberNum = String(member?.member_number ?? member?.memberNumber ?? (index + 1))
+      const phone = String(member?.phone || "")
+
+      return (
+        name.includes(query) ||
+        nameMarathi.includes(query) ||
+        memberNum === cleanNumQuery ||
+        memberNum.includes(cleanNumQuery) ||
+        phone.includes(query)
+      )
+    })
+  }, [contributionsList, memberSearchQuery])
+
   const sumSavings = contributionsList.reduce((sum, c: any) => sum + Number(c.savings_amount ?? c.savingsAmount ?? 0), 0)
   const sumPenalties = contributionsList.reduce((sum, c: any) => sum + Number(c.penalty_paid ?? c.penaltyPaid ?? 0), 0)
   const sumRepayments = contributionsList.reduce((sum, c: any) => sum + Number(c.loan_repayment ?? c.loanRepayment ?? 0), 0)
@@ -729,87 +753,158 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
           {/* Contributions Section */}
           <div className="bg-white dark:bg-[#1A1D27] border border-gray-100 dark:border-gray-800 rounded-3xl overflow-hidden shadow-sm">
             <div className="p-6 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/40">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">{t.contributionsHeader}</h2>
-              <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">{t.contributionsSub}</p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">{t.contributionsHeader}</h2>
+                  <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">{t.contributionsSub}</p>
+                </div>
+
+                {/* Member Search by Code or Name */}
+                <div className="relative w-full sm:w-72">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    value={memberSearchQuery}
+                    onChange={(e) => setMemberSearchQuery(e.target.value)}
+                    placeholder={lang === 'mr' ? "सदस्य कोड किंवा नावाने शोधा..." : "Search member by code or name..."}
+                    className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 transition shadow-sm"
+                  />
+                  {memberSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setMemberSearchQuery("")}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Status bar when search is active */}
+              {memberSearchQuery && (
+                <div className="mt-3 flex items-center justify-between bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900/50 rounded-xl px-3.5 py-2 text-xs text-orange-900 dark:text-orange-300">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">🔍</span>
+                    <span>
+                      {lang === 'mr'
+                        ? `${filteredContributions.length} सदस्य दिसत आहेत (इतर सर्व सदस्य लपवले आहेत)`
+                        : `${filteredContributions.length} member(s) shown (all other members hidden)`}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMemberSearchQuery("")}
+                    className="font-bold text-[#E85D26] dark:text-orange-400 hover:underline ml-2"
+                  >
+                    {lang === 'mr' ? "सर्व सदस्य दाखवा" : "Show all members"}
+                  </button>
+                </div>
+              )}
             </div>
             
             {/* MOBILE CONTRIBUTION CARDS */}
             <div className="md:hidden divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-[#1A1D27]">
-              {contributionsList.map((c: any, i) => {
-                const mId = c.member_id || c.memberId
-                const outstanding = getMemberOutstanding(mId)
-                const isAbsent = !(c.is_present ?? c.isPresent)
+              {filteredContributions.length === 0 ? (
+                <div className="p-8 text-center space-y-2">
+                  <p className="text-sm font-semibold text-gray-600 dark:text-gray-300">
+                    {lang === 'mr' ? `"${memberSearchQuery}" साठी कोणताही सदस्य सापडला नाही.` : `No member found matching "${memberSearchQuery}".`}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setMemberSearchQuery("")}
+                    className="text-xs text-[#E85D26] font-bold hover:underline"
+                  >
+                    {lang === 'mr' ? "सर्व सदस्य दाखवा" : "Show all members"}
+                  </button>
+                </div>
+              ) : (
+                filteredContributions.map((c: any, i) => {
+                  const mId = c.member_id || c.memberId
+                  const outstanding = getMemberOutstanding(mId)
+                  const isAbsent = !(c.is_present ?? c.isPresent)
+                  const memberCode = c.member?.member_number ?? c.member?.memberNumber ?? (i + 1)
 
-                return (
-                  <div key={c.id || mId}
-                       className={`p-4 ${isAbsent ? 'bg-gray-50 dark:bg-gray-900/20 opacity-70' : ''}`}>
-                    
-                    {/* Member + Present toggle */}
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <p className="font-bold text-gray-900 dark:text-white text-sm">
-                          {c.member?.name}
-                        </p>
-                        {outstanding > 0 && (
-                          <p className="text-xs text-orange-600 dark:text-orange-400 mt-0.5 font-medium">
-                            {t.outstandingLabel} {formatRupees(outstanding)}
-                          </p>
-                        )}
-                      </div>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <span className="text-xs text-gray-500 dark:text-gray-400 font-semibold">{t.presentLabel}</span>
-                        <input
-                          type="checkbox"
-                          checked={c.is_present ?? c.isPresent}
-                          disabled={isFinalized}
-                          onChange={e => handlePresenceToggle(mId, e.target.checked)}
-                          className="w-5 h-5 accent-orange-500 rounded cursor-pointer disabled:cursor-not-allowed"
-                        />
-                      </label>
-                    </div>
-
-                    {/* 2x2 input grid */}
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        { label: t.savingsLabel, field: 'savings_amount', valKey: 'savingsAmount', disabled: isAbsent },
-                        { label: t.penaltyLabel, field: 'penalty_paid', valKey: 'penaltyPaid', disabled: false },
-                        { label: t.loanRepaidLabel, field: 'loan_repayment', valKey: 'loanRepayment', disabled: isAbsent },
-                        { label: t.interestLabel, field: 'interest_paid', valKey: 'interestPaid', disabled: isAbsent },
-                      ].map(({ label, field, valKey, disabled }) => (
-                        <div key={field}>
-                          <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">
-                            {label}
-                          </label>
-                          <div className="relative">
-                            <input
-                              type="number" min="0"
-                              value={toR(c[field] ?? c[valKey] ?? 0)}
-                              disabled={isFinalized || disabled}
-                              onChange={e => handleCellChange(
-                                mId,
-                                field,
-                                toP(e.target.value)
-                              )}
-                              className="w-full border border-gray-200 dark:border-gray-800 rounded-lg 
-                                         px-2.5 py-2 text-sm outline-none
-                                         focus:border-orange-500 dark:bg-gray-950 dark:text-white
-                                         disabled:bg-gray-100 dark:disabled:bg-gray-900/50 transition"
-                            />
-                            {renderCellStatus(mId, field)}
+                  return (
+                    <div key={c.id || mId}
+                         className={`p-4 ${isAbsent ? 'bg-gray-50 dark:bg-gray-900/20 opacity-70' : ''}`}>
+                      
+                      {/* Member + Present toggle */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-bold bg-orange-50 text-[#E85D26] dark:bg-orange-950/40 dark:text-orange-400 border border-orange-200 dark:border-orange-900/50">
+                            #{memberCode}
+                          </span>
+                          <div>
+                            <p className="font-bold text-gray-900 dark:text-white text-sm">
+                              {c.member?.name}
+                            </p>
+                            {outstanding > 0 && (
+                              <p className="text-xs text-orange-600 dark:text-orange-400 mt-0.5 font-medium">
+                                {t.outstandingLabel} {formatRupees(outstanding)}
+                              </p>
+                            )}
                           </div>
                         </div>
-                      ))}
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <span className="text-xs text-gray-500 dark:text-gray-400 font-semibold">{t.presentLabel}</span>
+                          <input
+                            type="checkbox"
+                            checked={c.is_present ?? c.isPresent}
+                            disabled={isFinalized}
+                            onChange={e => handlePresenceToggle(mId, e.target.checked)}
+                            className="w-5 h-5 accent-orange-500 rounded cursor-pointer disabled:cursor-not-allowed"
+                          />
+                        </label>
+                      </div>
+
+                      {/* 2x2 input grid */}
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { label: t.savingsLabel, field: 'savings_amount', valKey: 'savingsAmount', disabled: isAbsent },
+                          { label: t.penaltyLabel, field: 'penalty_paid', valKey: 'penaltyPaid', disabled: false },
+                          { label: t.loanRepaidLabel, field: 'loan_repayment', valKey: 'loanRepayment', disabled: isAbsent },
+                          { label: t.interestLabel, field: 'interest_paid', valKey: 'interestPaid', disabled: isAbsent },
+                        ].map(({ label, field, valKey, disabled }) => (
+                          <div key={field}>
+                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block font-medium">
+                              {label}
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="number" min="0"
+                                value={toR(c[field] ?? c[valKey] ?? 0)}
+                                disabled={isFinalized || disabled}
+                                onChange={e => handleCellChange(
+                                  mId,
+                                  field,
+                                  toP(e.target.value)
+                                )}
+                                className="w-full border border-gray-200 dark:border-gray-800 rounded-lg 
+                                           px-2.5 py-2 text-sm outline-none
+                                           focus:border-orange-500 dark:bg-gray-950 dark:text-white
+                                           disabled:bg-gray-100 dark:disabled:bg-gray-900/50 transition"
+                              />
+                              {renderCellStatus(mId, field)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })
+              )}
             </div>
 
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50 dark:bg-gray-950 text-gray-500 dark:text-gray-400 font-semibold text-xs border-b border-gray-100 dark:border-gray-800">
-                    <th className="px-4 py-3 text-center">#</th>
+                    <th className="px-4 py-3 text-center">{lang === 'mr' ? 'सदस्य कोड' : 'Member Code'}</th>
                     <th className="px-4 py-3">{t.loansListHeader}</th>
                     <th className="px-4 py-3 text-center">{t.presentLabel}</th>
                     <th className="px-4 py-3 w-28">{t.savingsLabel}</th>
@@ -819,23 +914,47 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800 text-sm">
-                  {contributionsList.map((c: any, i) => {
-                    const mId = c.member_id || c.memberId
-                    const outstanding = getMemberOutstanding(mId)
-                    const isPresent = c.is_present ?? c.isPresent
-                    const rowOpacity = isPresent ? "opacity-100" : "opacity-60 bg-gray-50/50 dark:bg-gray-900/20"
-                    
-                    return (
-                      <tr key={c.id || mId} className={`${rowOpacity} hover:bg-orange-50/5 dark:hover:bg-gray-900/30 transition-colors duration-150`}>
-                        <td className="px-4 py-4 text-center text-gray-400 dark:text-gray-500 font-medium">{i + 1}</td>
-                        <td className="px-4 py-4">
-                          <div className="font-bold text-gray-900 dark:text-white">{c.member?.name}</div>
-                          {outstanding > 0 && (
-                            <div className="text-[11px] text-orange-600 dark:text-orange-400 font-medium mt-0.5">
-                              {t.outstandingLabel} {formatRupees(outstanding)}
-                            </div>
-                          )}
-                        </td>
+                  {filteredContributions.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-10 text-center text-gray-500 dark:text-gray-400">
+                        <p className="font-semibold text-sm text-gray-700 dark:text-gray-200">
+                          {lang === 'mr' ? `"${memberSearchQuery}" साठी कोणताही सदस्य सापडला नाही.` : `No member found matching "${memberSearchQuery}".`}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {lang === 'mr' ? "इतर सर्व सदस्य सध्या लपवले आहेत." : "All other members are currently hidden."}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setMemberSearchQuery("")}
+                          className="text-xs text-[#E85D26] font-bold hover:underline mt-3 inline-block"
+                        >
+                          {lang === 'mr' ? "सर्व सदस्य दाखवा (Show all)" : "Show all members"}
+                        </button>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredContributions.map((c: any, i) => {
+                      const mId = c.member_id || c.memberId
+                      const outstanding = getMemberOutstanding(mId)
+                      const isPresent = c.is_present ?? c.isPresent
+                      const rowOpacity = isPresent ? "opacity-100" : "opacity-60 bg-gray-50/50 dark:bg-gray-900/20"
+                      const memberCode = c.member?.member_number ?? c.member?.memberNumber ?? (i + 1)
+                      
+                      return (
+                        <tr key={c.id || mId} className={`${rowOpacity} hover:bg-orange-50/5 dark:hover:bg-gray-900/30 transition-colors duration-150`}>
+                          <td className="px-4 py-4 text-center">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-bold bg-orange-50 text-[#E85D26] dark:bg-orange-950/40 dark:text-orange-400 border border-orange-200 dark:border-orange-900/50">
+                              #{memberCode}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="font-bold text-gray-900 dark:text-white">{c.member?.name}</div>
+                            {outstanding > 0 && (
+                              <div className="text-[11px] text-orange-600 dark:text-orange-400 font-medium mt-0.5">
+                                {t.outstandingLabel} {formatRupees(outstanding)}
+                              </div>
+                            )}
+                          </td>
                         <td className="px-4 py-4 text-center">
                           <input
                             type="checkbox"
@@ -891,7 +1010,8 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
                         </td>
                       </tr>
                     )
-                  })}
+                  })
+                )}
                 </tbody>
               </table>
             </div>

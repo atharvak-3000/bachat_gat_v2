@@ -58,11 +58,18 @@ export function toSafeMember<T extends Record<string, any>>(member: T | null | u
       }
     : rawOrg
 
+  const memberNum = safeMember.member_number ?? safeMember.memberNumber
+  const joiningDate = safeMember.joining_date ?? safeMember.joiningDate
+
   return toPlainObject({
     ...safeMember,
     organization_id: orgId,
     organizationId: orgId,
     organization: org,
+    member_number: memberNum,
+    memberNumber: memberNum,
+    joining_date: joiningDate,
+    joiningDate: joiningDate,
   })
 }
 
