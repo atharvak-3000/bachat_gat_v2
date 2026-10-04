@@ -9,8 +9,8 @@ import type { Member, Organization } from "@/types"
 type MemberWithOrg = Member & { organization: Organization }
 
 const roleBadge: Record<string, { labelMr: string; labelEn: string; className: string }> = {
-  SUPERADMIN: { labelMr: "महाअध्यक्ष", labelEn: "SuperAdmin", className: "bg-purple-100 text-purple-700 border border-purple-200" },
-  ADMIN:      { labelMr: "अध्यक्ष", labelEn: "Admin", className: "bg-blue-100 text-blue-700 border border-blue-200" },
+  SUPERADMIN: { labelMr: "अध्यक्ष", labelEn: "Admin", className: "bg-purple-100 text-purple-700 border border-purple-200" },
+  ADMIN:      { labelMr: "सचिव", labelEn: "Manager", className: "bg-blue-100 text-blue-700 border border-blue-200" },
   MEMBER:     { labelMr: "सदस्य", labelEn: "Member", className: "bg-gray-100 text-gray-600 border border-gray-200" },
 }
 
@@ -164,7 +164,7 @@ export default function MembersClient({ members, currentMember, inviteLink }: Pr
                                 onClick={() => changeRole(m.id, 'SUPERADMIN')}
                                 disabled={isLoading}
                                 className="text-xs border border-[#2E4099] text-[#2E4099] hover:bg-[#2E4099]/10 px-2.5 py-1 rounded-lg transition-all font-medium whitespace-nowrap disabled:opacity-50">
-                                {isLoading ? '...' : 'अध्यक्ष बनवा'}
+                                {isLoading ? '...' : 'सचिव बनवा'}
                               </button>
                             )}
                             {m.role === 'SUPERADMIN' && (
@@ -172,7 +172,7 @@ export default function MembersClient({ members, currentMember, inviteLink }: Pr
                                 onClick={() => changeRole(m.id, 'MEMBER')}
                                 disabled={isLoading}
                                 className="text-xs border border-amber-500 text-amber-600 hover:bg-amber-50 px-2.5 py-1 rounded-lg transition-all font-medium whitespace-nowrap disabled:opacity-50">
-                                {isLoading ? '...' : 'अध्यक्ष काढा'}
+                                {isLoading ? '...' : 'सचिव काढा'}
                               </button>
                             )}
                             <button

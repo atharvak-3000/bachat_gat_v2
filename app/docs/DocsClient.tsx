@@ -139,7 +139,7 @@ export default function DocsClient() {
           titleEn: "Step 1: Admin Adds Members Directly",
           titleMr: "पायरी १: ॲडमिनद्वारे नवीन सदस्य जोडणे",
           descEn: "Gat President or Admin opens /members and clicks 'Add New Member'.",
-          descMr: "गट अध्यक्ष किंवा ॲडमिन /members उघडून 'नवीन सदस्य जोडा' वर क्लिक करतात.",
+          descMr: "गट अध्यक्ष किंवा सचिव /members उघडून 'नवीन सदस्य जोडा' वर क्लिक करतात.",
           detailsEn: [
             "Input Full Name, Mobile Number, and Role (Admin / Member)",
             "Assign Member Roll Number (1, 2, 3...)",

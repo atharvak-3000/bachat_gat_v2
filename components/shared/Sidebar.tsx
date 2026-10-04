@@ -24,8 +24,8 @@ export default function Sidebar({ member, pendingCount = 0 }: { member: MemberWi
   }, [])
 
   const roleText = lang === 'mr'
-    ? (member.role === 'SUPERADMIN' ? 'महाअध्यक्ष' : member.role === 'ADMIN' ? 'अध्यक्ष' : 'सदस्य')
-    : (member.role === 'SUPERADMIN' ? 'SuperAdmin' : member.role === 'ADMIN' ? 'Admin' : 'Member')
+    ? (member.role === 'SUPERADMIN' ? 'अध्यक्ष' : member.role === 'ADMIN' ? 'सचिव' : 'सदस्य')
+    : (member.role === 'SUPERADMIN' ? 'Admin' : member.role === 'ADMIN' ? 'Manager' : 'Member')
 
   const navItems = [
     { href: "/dashboard", label: lang === 'mr' ? 'डॅशबोर्ड' : 'Dashboard' },

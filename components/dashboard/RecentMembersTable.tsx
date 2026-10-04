@@ -59,8 +59,8 @@ export default function RecentMembersTable({
   }
 
   const getRoleBadge = (role: string) => {
-    if (role === 'SUPERADMIN') return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 border border-purple-200">{lang === 'mr' ? 'महाअध्यक्ष' : 'SuperAdmin'}</span>
-    if (role === 'ADMIN') return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200">{lang === 'mr' ? 'अध्यक्ष' : 'Admin'}</span>
+    if (role === 'SUPERADMIN') return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 border border-purple-200">{lang === 'mr' ? 'अध्यक्ष' : 'Admin'}</span>
+    if (role === 'ADMIN') return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200">{lang === 'mr' ? 'सचिव' : 'Manager'}</span>
     return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200">{lang === 'mr' ? 'सदस्य' : 'Member'}</span>
   }
 

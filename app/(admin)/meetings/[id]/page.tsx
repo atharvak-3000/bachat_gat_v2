@@ -125,7 +125,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
       purposeLabel: "हेतू",
       purposePlaceholder: "उदा. शेती / व्यवसाय / वैद्यकीय",
       guarantorLabel: "जामीनदार निवडा (पर्यायी)",
-      adminHint: "* अध्यक्षांनी मंजूर केलेले &rarr; सुपरअध्यक्ष मंजुरीची प्रतीक्षा | सुपरअध्यक्षांनी मंजूर केलेले &rarr; स्वयंचलित मंजूर",
+      adminHint: "* सचिवांनी मंजूर केलेले &rarr; अध्यक्ष मंजुरीची प्रतीक्षा | अध्यक्षांनी मंजूर केलेले &rarr; स्वयंचलित मंजूर",
       issueLoanBtn: "कर्ज मंजूर करा",
       loansListHeader: "सदस्य",
       loansListAmount: "रक्कम",

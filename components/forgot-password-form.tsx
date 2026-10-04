@@ -39,7 +39,7 @@ export function ForgotPasswordForm({
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Please contact your Bachat Gat superadmin to reset your password.
+              Please contact your Bachat Gat admin to reset your password.
             </p>
           </CardContent>
         </Card>
@@ -48,7 +48,7 @@ export function ForgotPasswordForm({
           <CardHeader>
             <CardTitle className="text-2xl">Reset Your Password</CardTitle>
             <CardDescription>
-              Type in your email to contact superadmin
+              Type in your email to contact admin
             </CardDescription>
           </CardHeader>
           <CardContent>
