@@ -300,13 +300,13 @@ export default function LandingClient({ isAuthenticated, role, status }: Landing
             </div>
           </div>
 
-          {/* Center: Nav links (Desktop) + Translator Toggle */}
-          <nav className="hidden md:flex items-center gap-8">
-            <a href="#features" className="text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition-colors">{t.features}</a>
-            <a href="#how-it-works" className="text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition-colors">{t.howItWorks}</a>
-            <a href="#testimonials" className="text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition-colors">{t.testimonials}</a>
-            <a href="#pricing" className="text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition-colors">{t.pricing}</a>
-            <Link href="/docs" className="text-sm font-semibold text-[#E8530A] dark:text-orange-400 hover:underline flex items-center gap-1">
+          {/* Center: Nav links (Full Desktop >= 1280px) */}
+          <nav className="hidden xl:flex items-center gap-6">
+            <a href="#features" className="text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition-colors whitespace-nowrap">{t.features}</a>
+            <a href="#how-it-works" className="text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition-colors whitespace-nowrap">{t.howItWorks}</a>
+            <a href="#testimonials" className="text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition-colors whitespace-nowrap">{t.testimonials}</a>
+            <a href="#pricing" className="text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition-colors whitespace-nowrap">{t.pricing}</a>
+            <Link href="/docs" className="text-sm font-semibold text-[#E8530A] dark:text-orange-400 hover:underline flex items-center gap-1 whitespace-nowrap">
               <span>📖</span>
               <span>{lang === "mr" ? "नियमावली (Docs)" : "User Guide"}</span>
             </Link>
@@ -314,7 +314,7 @@ export default function LandingClient({ isAuthenticated, role, status }: Landing
             {/* Translator Toggle */}
             <button
               onClick={toggleLanguage}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-orange-100 dark:border-orange-900/30 text-xs font-bold text-[#E8530A] dark:text-orange-400 bg-orange-50/50 dark:bg-orange-950/20 hover:bg-orange-50 dark:hover:bg-orange-950/40 active:scale-95 transition-all shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-orange-100 dark:border-orange-900/30 text-xs font-bold text-[#E8530A] dark:text-orange-400 bg-orange-50/50 dark:bg-orange-950/20 hover:bg-orange-50 dark:hover:bg-orange-950/40 active:scale-95 transition-all shadow-sm whitespace-nowrap"
               title="Switch Language / भाषा बदला"
             >
               <span>🌐</span>
@@ -324,12 +324,12 @@ export default function LandingClient({ isAuthenticated, role, status }: Landing
             <DarkModeToggle className="bg-blue-50 hover:bg-blue-100 text-gray-700 border border-blue-100/50 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-white dark:border-blue-900/40" />
           </nav>
 
-          {/* Right: CTA Buttons (Desktop) */}
-          <div className="hidden md:flex items-center gap-3">
+          {/* Right: CTA Buttons (Desktop >= 1280px) */}
+          <div className="hidden xl:flex items-center gap-3">
             {isAuthenticated ? (
               <button
                 onClick={handleCTA}
-                className="bg-[#E8530A] hover:bg-[#C94208] text-white text-sm font-extrabold px-6 py-2.5 rounded-xl transition duration-150 active:scale-95 shadow-md shadow-orange-500/10"
+                className="bg-[#E8530A] hover:bg-[#C94208] text-white text-sm font-extrabold px-6 py-2.5 rounded-xl transition duration-150 active:scale-95 shadow-md shadow-orange-500/10 whitespace-nowrap"
               >
                 {t.goToDashboard}
               </button>
@@ -337,13 +337,13 @@ export default function LandingClient({ isAuthenticated, role, status }: Landing
               <>
                 <button
                   onClick={handleSignIn}
-                  className="text-sm font-extrabold text-[#1B2B6B] dark:text-white bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-950/50 border border-blue-200 dark:border-blue-900/30 rounded-xl px-5 py-2.5 transition active:scale-95"
+                  className="text-sm font-extrabold text-[#1B2B6B] dark:text-white bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-950/50 border border-blue-200 dark:border-blue-900/30 rounded-xl px-5 py-2.5 transition active:scale-95 whitespace-nowrap"
                 >
                   {t.signIn}
                 </button>
                 <button
                   onClick={handleSignUp}
-                  className="bg-[#E8530A] hover:bg-[#C94208] text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition duration-150 active:scale-95 shadow-md shadow-orange-500/10"
+                  className="bg-[#E8530A] hover:bg-[#C94208] text-white text-sm font-extrabold px-5 py-2.5 rounded-xl transition duration-150 active:scale-95 shadow-md shadow-orange-500/10 whitespace-nowrap"
                 >
                   {t.startToday}
                 </button>
@@ -351,12 +351,41 @@ export default function LandingClient({ isAuthenticated, role, status }: Landing
             )}
           </div>
 
-          {/* Mobile Hamburger Button */}
-          <div className="md:hidden flex items-center gap-3">
+          {/* Tablet & Mobile Header Controls (< 1280px, including 768px - 1024px) */}
+          <div className="xl:hidden flex items-center gap-2 sm:gap-3">
+            {/* Quick Lang Switch */}
+            <button
+              onClick={toggleLanguage}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-orange-100 dark:border-orange-900/30 text-xs font-bold text-[#E8530A] dark:text-orange-400 bg-orange-50/50 dark:bg-orange-950/20 active:scale-95 transition-all shadow-sm whitespace-nowrap"
+              title="Switch Language / भाषा बदला"
+            >
+              <span>🌐</span>
+              <span className="font-extrabold">{lang === "en" ? "मराठी" : "English"}</span>
+            </button>
+
             <DarkModeToggle className="bg-blue-50 hover:bg-blue-100 text-gray-700 border border-blue-100/50 dark:bg-blue-950/40 dark:hover:bg-blue-950/60 dark:text-white dark:border-blue-900/40" />
+
+            {/* Quick Tablet CTA Buttons */}
+            {isAuthenticated ? (
+              <button
+                onClick={handleCTA}
+                className="hidden sm:inline-flex bg-[#E8530A] hover:bg-[#C94208] text-white text-xs sm:text-sm font-extrabold px-4 py-2 rounded-xl transition duration-150 active:scale-95 shadow-sm whitespace-nowrap"
+              >
+                {t.goToDashboard}
+              </button>
+            ) : (
+              <button
+                onClick={handleSignIn}
+                className="hidden sm:inline-flex text-xs sm:text-sm font-extrabold text-[#1B2B6B] dark:text-white bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-950/50 border border-blue-200 dark:border-blue-900/30 rounded-xl px-3.5 py-2 transition active:scale-95 whitespace-nowrap"
+              >
+                {t.signIn}
+              </button>
+            )}
+
+            {/* Hamburger Button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="text-gray-600 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] focus:outline-none p-1.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+              className="text-gray-700 dark:text-gray-200 hover:text-[#E8530A] dark:hover:text-[#E85D26] focus:outline-none p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition active:scale-95"
               aria-label="Toggle Menu"
             >
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -364,72 +393,80 @@ export default function LandingClient({ isAuthenticated, role, status }: Landing
           </div>
         </div>
 
-        {/* Mobile Navigation Dropdown */}
+        {/* Tablet & Mobile Navigation Dropdown (< 1280px) */}
         {mobileMenuOpen && (
-          <div className="md:hidden bg-white dark:bg-[#1A1D27] border-b border-gray-100 dark:border-gray-800 px-6 py-6 space-y-6 shadow-lg animate-fadeIn">
+          <div className="xl:hidden bg-white dark:bg-[#1A1D27] border-b border-gray-100 dark:border-gray-800 px-6 py-6 space-y-6 shadow-xl animate-fadeIn">
             <nav className="flex flex-col gap-4">
               <a 
                 href="#features" 
                 onClick={() => setMobileMenuOpen(false)}
-                className="text-base font-bold text-gray-700 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition"
+                className="text-base font-bold text-gray-700 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition py-1"
               >
                 {t.features}
               </a>
               <a 
                 href="#how-it-works" 
                 onClick={() => setMobileMenuOpen(false)}
-                className="text-base font-bold text-gray-700 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition"
+                className="text-base font-bold text-gray-700 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition py-1"
               >
                 {t.howItWorks}
               </a>
               <a 
                 href="#testimonials" 
                 onClick={() => setMobileMenuOpen(false)}
-                className="text-base font-bold text-gray-700 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition"
+                className="text-base font-bold text-gray-700 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition py-1"
               >
                 {t.testimonials}
               </a>
               <a 
                 href="#pricing" 
                 onClick={() => setMobileMenuOpen(false)}
-                className="text-base font-bold text-gray-700 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition"
+                className="text-base font-bold text-gray-700 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition py-1"
               >
                 {t.pricing}
               </a>
-              
-              {/* Mobile Translator Toggle */}
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false)
-                  toggleLanguage()
-                }}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-orange-100 dark:border-orange-900/30 text-sm font-bold text-[#E8530A] dark:text-orange-400 bg-orange-50/50 dark:bg-orange-950/20 hover:bg-orange-50 dark:hover:bg-orange-950/40 active:scale-95 transition-all"
+              <Link 
+                href="/docs" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-base font-bold text-[#E8530A] dark:text-orange-400 hover:underline flex items-center gap-1.5 py-1"
               >
-                <span>🌐 {lang === "en" ? "मराठी" : "English"}</span>
-              </button>
+                <span>📖</span>
+                <span>{lang === "mr" ? "नियमावली (Docs)" : "User Guide"}</span>
+              </Link>
             </nav>
-            <hr className="border-gray-100 dark:border-gray-800" />
-            <div className="flex flex-col gap-3">
+            <hr className="border-gray-150 dark:border-gray-800" />
+            <div className="flex flex-col sm:flex-row gap-3">
               {isAuthenticated ? (
                 <button
                   onClick={() => {
                     setMobileMenuOpen(false)
                     handleCTA()
                   }}
-                  className="w-full text-center bg-[#E8530A] hover:bg-[#C94208] text-white font-extrabold py-3 rounded-2xl transition active:scale-95 shadow-md"
+                  className="w-full text-center bg-[#E8530A] hover:bg-[#C94208] text-white font-extrabold py-3.5 rounded-2xl transition active:scale-95 shadow-md"
                 >
                   {t.goToDashboard}
                 </button>
               ) : (
-                <button
-                  onClick={() => {
-                    setMobileMenuOpen(false)
-                    handleSignIn()
-                  }}
-                  className="w-full text-center bg-gradient-to-r from-[#1B2B6B] to-[#2E4CAD] hover:shadow-lg text-white font-extrabold py-3 rounded-2xl transition active:scale-95"
-                >
-                  {t.signInOrRegister}
-                </button>
+                <>
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false)
+                      handleSignIn()
+                    }}
+                    className="w-full sm:flex-1 text-center bg-blue-50 dark:bg-blue-950/40 text-[#1B2B6B] dark:text-white border border-blue-200 dark:border-blue-900/40 font-extrabold py-3.5 rounded-2xl transition active:scale-95"
+                  >
+                    {t.signIn}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false)
+                      handleSignUp()
+                    }}
+                    className="w-full sm:flex-1 text-center bg-[#E8530A] hover:bg-[#C94208] text-white font-extrabold py-3.5 rounded-2xl transition active:scale-95 shadow-md"
+                  >
+                    {t.startToday}
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -437,16 +474,16 @@ export default function LandingClient({ isAuthenticated, role, status }: Landing
       </header>
 
       {/* 2. Hero Section */}
-      <section className="bg-gradient-to-br from-[#1B2B6B] via-[#2E4CAD] to-[#1B2B6B] dark:from-[#0D1021] dark:via-[#1B2B6B] dark:to-[#0D1021] text-white py-20 lg:py-32 px-6 relative overflow-hidden flex-shrink-0">
+      <section className="bg-gradient-to-br from-[#1B2B6B] via-[#2E4CAD] to-[#1B2B6B] dark:from-[#0D1021] dark:via-[#1B2B6B] dark:to-[#0D1021] text-white py-12 sm:py-16 lg:py-24 px-4 sm:px-6 relative overflow-hidden flex-shrink-0">
         
         {/* Glow circles */}
         <div className="absolute top-12 right-1/4 w-96 h-96 rounded-full bg-[#2E4CAD]/20 dark:bg-blue-900/10 blur-3xl -z-10" />
         <div className="absolute bottom-12 left-10 w-80 h-80 rounded-full bg-[#E8530A]/10 dark:bg-orange-950/5 blur-3xl -z-10" />
 
-        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center gap-16 lg:gap-8 relative z-10">
+        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center gap-10 lg:gap-8 relative z-10">
           
           {/* Left Side: Overlapping/tilted dashboard preview images */}
-          <div className="w-full lg:w-[65%] flex justify-center items-center p-4">
+          <div className="w-full lg:w-[65%] flex justify-center items-center p-2 sm:p-4">
             <div className="relative flex items-center justify-center w-full max-w-[640px] lg:max-w-none">
               {/* Desktop Preview */}
               <div className="relative transition-all duration-300 ease-out transform rotate-[-6deg] hover:rotate-0 hover:scale-105 z-10 w-full max-w-[900px]">
@@ -461,7 +498,7 @@ export default function LandingClient({ isAuthenticated, role, status }: Landing
               </div>
               
               {/* Mobile Preview */}
-              <div className="absolute right-0 lg:right-[-25px] transition-all duration-300 ease-out transform rotate-[4deg] hover:rotate-0 hover:scale-105 z-20 w-[30%] max-w-[250px]">
+              <div className="absolute right-0 sm:right-2 lg:right-[-20px] transition-all duration-300 ease-out transform rotate-[4deg] hover:rotate-0 hover:scale-105 z-20 w-[32%] sm:w-[28%] max-w-[220px] sm:max-w-[250px]">
                 <Image
                   src={isDarkMode ? "/Dashboard_dark_mobile.png" : "/Dashboard_light_mobile.png"}
                   alt="Mobile Dashboard Preview"
@@ -475,19 +512,14 @@ export default function LandingClient({ isAuthenticated, role, status }: Landing
           </div>
 
           {/* Right Side: Tagline, subtitle, and CTA buttons */}
-          <div className="w-full lg:w-[31%] text-center lg:text-left space-y-6 flex flex-col items-center lg:items-start">
-            {/* Badge
-            <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white/10 border border-white/20 rounded-full text-orange-400 dark:text-orange-300 text-xs font-bold uppercase tracking-wider mb-2">
-              {t.mgmtBadge}
-            </div> */}
-
+          <div className="w-full lg:w-[33%] text-center lg:text-left space-y-5 lg:space-y-6 flex flex-col items-center lg:items-start px-2 sm:px-0">
             {/* Heading */}
-            <h1 className="text-4xl lg:text-5xl font-black text-white tracking-tight leading-normal lg:leading-normal">
+            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-snug sm:leading-tight lg:leading-tight">
               {t.heroHeading}
             </h1>
 
             {/* Subtitle / Description Paragraph */}
-            <p className="text-blue-100 dark:text-blue-200 text-sm md:text-base font-medium leading-relaxed">
+            <p className="text-blue-100 dark:text-blue-200 text-sm md:text-base font-medium leading-relaxed max-w-xl">
               {t.heroSubtitle}
             </p>
 

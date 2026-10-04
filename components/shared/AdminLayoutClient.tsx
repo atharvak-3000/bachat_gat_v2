@@ -104,6 +104,32 @@ export default function AdminLayoutClient({
 
   const renderSidebarContent = () => (
     <div className="flex flex-col h-full text-white">
+      {/* Bachat Gat Online Brand Logo */}
+      <div className="mb-4 pb-4 border-b border-white/10 flex items-center justify-between">
+        <Link href="/dashboard" className="flex items-center">
+          <div className="relative h-7 w-32">
+            <Image
+              src="/logo-horizontal.png"
+              alt="BachatGatOnline"
+              fill
+              sizes="128px"
+              className="object-contain brightness-0 invert"
+              priority
+            />
+          </div>
+        </Link>
+        <div className="lg:hidden">
+          <button
+            onClick={() => setShowSidebar(false)}
+            className="p-1 rounded-lg text-blue-200 hover:bg-white/10 hover:text-white"
+          >
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
       <div className="mb-6 flex justify-between items-center">
         {/* Logo + Name */}
         <div className="flex items-center gap-3">
@@ -127,19 +153,9 @@ export default function AdminLayoutClient({
             <p className="text-xs text-blue-200">{member.role}</p>
           </div>
           <div className="flex items-center gap-2">
-            {/* Only show bell on desktop sidebar because mobile topbar already has a bell */}
-            <div className="hidden md:block">
+            {/* Only show bell on desktop sidebar because mobile/tablet topbar already has a bell */}
+            <div className="hidden lg:block">
               <NotificationBell />
-            </div>
-            <div className="md:hidden">
-              <button
-                onClick={() => setShowSidebar(false)}
-                className="p-1 rounded-lg text-blue-200 hover:bg-white/10 hover:text-white"
-              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
             </div>
           </div>
         </div>
@@ -224,14 +240,14 @@ export default function AdminLayoutClient({
   )
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-[#F5F6FA] dark:bg-[#0F1117] pb-16 md:pb-0 transition-colors duration-150">
+    <div className="min-h-screen flex flex-col lg:flex-row bg-[#F5F6FA] dark:bg-[#0F1117] pb-16 lg:pb-0 transition-colors duration-150">
       {/* Sidebar for Desktop */}
-      <aside className="hidden md:flex md:w-64 border-r border-white/10 dark:border-white/5 bg-[#1B2B6B] dark:bg-[#0D1021] p-4 shrink-0 flex-col h-screen sticky top-0">
+      <aside className="hidden lg:flex lg:w-64 border-r border-white/10 dark:border-white/5 bg-[#1B2B6B] dark:bg-[#0D1021] p-4 shrink-0 flex-col h-screen sticky top-0">
         {renderSidebarContent()}
       </aside>
 
-      {/* Top bar for Mobile */}
-      <header className="md:hidden sticky top-0 z-30 bg-white dark:bg-[#1A1D27] border-b border-[#E5E7EB] dark:border-gray-700 px-4 py-3 flex items-center justify-between transition-colors duration-150">
+      {/* Top bar for Mobile & Tablet */}
+      <header className="lg:hidden sticky top-0 z-30 bg-white dark:bg-[#1A1D27] border-b border-[#E5E7EB] dark:border-gray-700 px-4 py-3 flex items-center justify-between transition-colors duration-150">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowSidebar(true)}
@@ -241,14 +257,14 @@ export default function AdminLayoutClient({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <span className="font-bold text-[#1B2B6B] dark:text-white truncate max-w-[150px]">{member.organization.name}</span>
+          <span className="font-bold text-[#1B2B6B] dark:text-white truncate max-w-[180px] sm:max-w-xs">{member.organization.name}</span>
         </div>
         <div className="flex items-center gap-2">
           <DarkModeToggle className="bg-black/5 hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/20 text-gray-700 dark:text-white" />
           {/* Compact lang selector in topbar */}
           <button
             onClick={() => setLanguage(lang === 'mr' ? 'en' : 'mr')}
-            className="text-[10px] bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-400 font-extrabold px-1.5 py-0.5 rounded"
+            className="text-xs bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-400 font-extrabold px-2 py-1 rounded-lg"
           >
             {lang === 'mr' ? 'EN' : 'मराठी'}
           </button>
@@ -256,9 +272,9 @@ export default function AdminLayoutClient({
         </div>
       </header>
 
-      {/* Mobile Drawer Overlay */}
+      {/* Mobile & Tablet Drawer Overlay */}
       {showSidebar && (
-        <div className="md:hidden fixed inset-0 z-50 flex">
+        <div className="lg:hidden fixed inset-0 z-50 flex">
           {/* Overlay backdrop */}
           <div
             className="fixed inset-0 bg-gray-600/50 backdrop-blur-sm transition-opacity"
@@ -278,8 +294,8 @@ export default function AdminLayoutClient({
         </div>
       </main>
 
-      {/* Bottom Nav for Mobile */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-[#1A1D27] border-t border-[#E5E7EB] dark:border-gray-700 z-30 flex justify-around py-2 transition-colors duration-150">
+      {/* Bottom Nav for Mobile & Tablet */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-[#1A1D27] border-t border-[#E5E7EB] dark:border-gray-700 z-30 flex justify-around py-2 transition-colors duration-150">
         {filteredNavItems.map((item) => {
           const isActive = pathname.startsWith(item.href)
           return (
@@ -293,7 +309,7 @@ export default function AdminLayoutClient({
               <div className={`${isActive ? 'text-[#E85D26]' : 'text-gray-400 dark:text-gray-500'} transition-colors duration-150`}>
                 {item.icon}
               </div>
-              <span className="text-[10px] font-medium tracking-tight truncate max-w-[64px]">
+              <span className="text-[10px] sm:text-xs font-medium tracking-tight truncate max-w-[72px]">
                 {item.label.split(' ')[0]}
               </span>
             </Link>
