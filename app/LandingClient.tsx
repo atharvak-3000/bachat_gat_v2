@@ -306,10 +306,6 @@ export default function LandingClient({ isAuthenticated, role, status }: Landing
             <a href="#how-it-works" className="text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition-colors whitespace-nowrap">{t.howItWorks}</a>
             <a href="#testimonials" className="text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition-colors whitespace-nowrap">{t.testimonials}</a>
             <a href="#pricing" className="text-sm font-semibold text-gray-600 dark:text-gray-300 hover:text-[#E8530A] dark:hover:text-[#E85D26] transition-colors whitespace-nowrap">{t.pricing}</a>
-            <Link href="/docs" className="text-sm font-semibold text-[#E8530A] dark:text-orange-400 hover:underline flex items-center gap-1 whitespace-nowrap">
-              <span>📖</span>
-              <span>{lang === "mr" ? "नियमावली (Docs)" : "User Guide"}</span>
-            </Link>
             
             {/* Translator Toggle */}
             <button
@@ -425,14 +421,6 @@ export default function LandingClient({ isAuthenticated, role, status }: Landing
               >
                 {t.pricing}
               </a>
-              <Link 
-                href="/docs" 
-                onClick={() => setMobileMenuOpen(false)}
-                className="text-base font-bold text-[#E8530A] dark:text-orange-400 hover:underline flex items-center gap-1.5 py-1"
-              >
-                <span>📖</span>
-                <span>{lang === "mr" ? "नियमावली (Docs)" : "User Guide"}</span>
-              </Link>
             </nav>
             <hr className="border-gray-150 dark:border-gray-800" />
             <div className="flex flex-col sm:flex-row gap-3">
